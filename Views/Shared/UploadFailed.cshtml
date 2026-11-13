@@ -1,0 +1,60 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>Upload Failed</title>
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 60px;
+        }
+
+        h1 {
+            color: #ff6666;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            margin-top: 10px;
+            font-size: 18px;
+        }
+
+        .retry-link {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 22px;
+            background: #444;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: 0.2s ease;
+        }
+
+            .retry-link:hover {
+                background: #666;
+            }
+    </style>
+</head>
+<body>
+
+    <h1>Upload Failed!</h1>
+
+    <div class="message">
+        Make sure you picked a file, entered a name or caption,<br />
+        and that it's a supported type (images: .jpg, .jpeg, .png, .gif, .webp).
+    </div>
+
+    <!-- Goes back to whichever upload form was used (guest uploads, Add Media, ...) -->
+    <a class="retry-link" href="javascript:history.back()">
+        Try Again
+    </a>
+
+</body>
+</html>

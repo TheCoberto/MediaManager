@@ -1,0 +1,34 @@
+﻿@model IEnumerable<MediaManager.Models.ImageModel>
+
+@{
+    ViewBag.Title = "Shuffled Images";
+    var rnd = new Random();
+    var randomized = (Model ?? Enumerable.Empty<MediaManager.Models.ImageModel>()).OrderBy(i => rnd.Next()).ToList();
+}
+
+<h2>Shuffled Images</h2>
+
+<p>
+    <u>@Html.ActionLink("Upload an image", "ImageAdd", "Images")</u>
+</p>
+<p>
+    <u>@Html.ActionLink("Shuffle", "ImageViewAllShuffled", "Images")</u>
+</p>
+<p>
+    <u>@Html.ActionLink("All Images", "ImageViewAll", "Images")</u>
+</p>
+
+<center>
+    @if (!randomized.Any())
+    {
+        <p style="opacity:.8;">No uploads yet. Be the first!</p>
+    }
+    @foreach (var img in randomized)
+    {
+        <h4>@img.Description</h4>
+        <img src="@MediaManager.Models.SiteSettings.ImageUrl(img.Title)" alt="@img.Description"
+             style="max-width:650px; width:100%; height:auto;">
+        <br />
+        <hr />
+    }
+</center>

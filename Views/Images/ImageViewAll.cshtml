@@ -1,0 +1,30 @@
+﻿@model IEnumerable<MediaManager.Models.ImageModel>
+
+@{
+    ViewBag.Title = "All Images";
+    var images = (Model ?? Enumerable.Empty<MediaManager.Models.ImageModel>()).OrderByDescending(x => x.ImageId).ToList();
+}
+
+<h2>All Images</h2>
+
+<p>
+    <u>@Html.ActionLink("Upload an image", "ImageAdd", "Images")</u>
+</p>
+<p>
+    <u>@Html.ActionLink("Shuffle", "ImageViewAllShuffled", "Images")</u>
+</p>
+
+<center>
+    @if (!images.Any())
+    {
+        <p style="opacity:.8;">No uploads yet. Be the first!</p>
+    }
+    @foreach (var img in images)
+    {
+        <h4>@img.Description</h4>
+        <img src="@MediaManager.Models.SiteSettings.ImageUrl(img.Title)" alt="@img.Description"
+             style="max-width:650px; width:100%; height:auto;">
+        <br />
+        <hr />
+    }
+</center>

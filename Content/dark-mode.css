@@ -1,0 +1,127 @@
+﻿/*
+    Themes. The <html> element gets "theme-dark" (default) or "theme-light" from the script in
+    _Layout.cshtml, which remembers the choice per browser (localStorage "theme").
+*/
+
+/* ===================== DARK (default) ===================== */
+html.theme-dark body {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+html.theme-dark h1, html.theme-dark h2, html.theme-dark h3,
+html.theme-dark h4, html.theme-dark h5 {
+    color: #ffb3b3;
+}
+
+html.theme-dark hr {
+    border-top: 1px solid #333;
+}
+
+html.theme-dark input, html.theme-dark textarea, html.theme-dark select, html.theme-dark button {
+    background-color: #1e1e1e;
+    color: #f5f5f5;
+    border: 1px solid #333;
+}
+
+html.theme-dark input[type="submit"], html.theme-dark button {
+    background-color: #333;
+    border: none;
+}
+
+    html.theme-dark input[type="submit"]:hover, html.theme-dark button:hover {
+        background-color: #555;
+    }
+
+html.theme-dark a {
+    color: #9ecbff;
+}
+
+    html.theme-dark a:hover {
+        color: #cbe3ff;
+    }
+
+/* Bootstrap pieces that were light-grey text on white in the old always-dark theme */
+html.theme-dark .dropdown-menu {
+    background-color: #1e1e1e;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+    html.theme-dark .dropdown-menu label,
+    html.theme-dark .dropdown-menu > li > a {
+        color: #e0e0e0;
+    }
+
+html.theme-dark .btn-default {
+    background-color: #333;
+    border-color: #444;
+    color: #f5f5f5;
+}
+
+html.theme-dark .badge {
+    background-color: #555;
+}
+
+html.theme-dark .modal-content {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+}
+
+html.theme-dark .file-info {          /* Storage Random details box */
+    background-color: #1e1e1e;
+    border-color: #333 !important;
+}
+
+html.theme-dark .table > thead > tr > th,
+html.theme-dark .table > tbody > tr > td {
+    border-color: #333;
+}
+
+/* ===================== LIGHT ===================== */
+html.theme-light body {
+    background-color: #ffffff;
+    color: #222;
+}
+
+html.theme-light h1, html.theme-light h2, html.theme-light h3,
+html.theme-light h4, html.theme-light h5 {
+    color: #a33a3a;
+}
+
+html.theme-light hr {
+    border-top: 1px solid #ddd;
+}
+
+html.theme-light input, html.theme-light textarea, html.theme-light select, html.theme-light button {
+    background-color: #fff;
+    color: #222;
+    border: 1px solid #ccc;
+}
+
+html.theme-light input[type="submit"], html.theme-light button {
+    background-color: #e6e6e6;
+    border: 1px solid #ccc;
+}
+
+    html.theme-light input[type="submit"]:hover, html.theme-light button:hover {
+        background-color: #d4d4d4;
+    }
+
+html.theme-light a {
+    color: #1a5fb4;
+}
+
+    html.theme-light a:hover {
+        color: #0d3b75;
+    }
+
+html.theme-light .file-info {
+    background-color: #f8f9fa;
+}
+
+html.theme-light .navbar-toggle {     /* phone menu button sits on the dark navbar in both themes */
+    background-color: #333;
+    border-color: #333;
+}
+

@@ -1,0 +1,259 @@
+﻿@{
+    ViewBag.Title = "Add Media";
+    // e.g. "image/*,video/*,audio/*,.jpg,.png,...,.pdf,.odt": phones show photos / music / files to pick from
+    string accept = "image/*,video/*,audio/*," + string.Join(",", MediaManager.Models.Constants.Constants.SupportedExtensions);
+}
+<p>
+    <u>@Html.ActionLink("Home", "Index", "Home")</u>
+</p>
+
+<div class="add-media">
+    <h1 class="text-center">Media Adder</h1>
+    <hr />
+
+    @Html.AntiForgeryToken()
+
+    <div class="am-folder">
+        <label for="folderInput">Folder</label>
+        <input type="text" id="folderInput" list="folderList" placeholder="e.g. image/Cats (pick one or type a new folder)" autocomplete="off" />
+        <datalist id="folderList"></datalist>
+    </div>
+
+    <label id="dropZone" class="am-drop" for="fileInput">
+        <input type="file" id="fileInput" multiple accept="@accept" />
+        <strong>Choose files</strong> or drag them here
+        <span class="am-hint">
+            Pictures, videos, audio (.mp3, .wav, ...) and documents (.pdf, .txt, .odt, .docx, ...),
+            up to @MediaManager.Models.ChunkedUpload.FormatLimit(MediaManager.Models.SiteSettings.MaxUploadBytes) each.
+            You can pick several at once and rename any of them below before uploading.
+        </span>
+    </label>
+
+    <div id="queue" class="am-queue"></div>
+
+    <div class="am-buttons">
+        <button type="button" id="uploadBtn" class="btn btn-success" disabled>Upload</button>
+        <button type="button" id="clearDoneBtn" class="btn btn-default" style="display:none;">Clear finished</button>
+        <span id="summary" class="am-summary"></span>
+    </div>
+</div>
+
+<style>
+    .add-media { max-width: 760px; margin: 0 auto; }
+    .am-folder { margin-bottom: 12px; }
+    .am-folder label { display: block; margin-bottom: 4px; }
+    .am-folder input { width: 100%; max-width: none; padding: 6px; }
+
+    .am-drop {
+        display: block; text-align: center; cursor: pointer; font-weight: normal;
+        padding: 26px 12px; border: 2px dashed rgba(127,127,127,.6); border-radius: 8px;
+    }
+    .am-drop.dragover { border-color: indianred; background: rgba(205,92,92,.08); }
+    .am-drop input[type=file] { display: none; }
+    .am-hint { display: block; font-size: 12px; opacity: .7; margin-top: 6px; }
+
+    .am-queue { margin-top: 14px; }
+    .am-item {
+        display: flex; align-items: center; gap: 10px; padding: 8px 0;
+        border-bottom: 1px solid rgba(127,127,127,.3);
+    }
+    .am-thumb {
+        width: 64px; height: 64px; flex: 0 0 64px; object-fit: cover; border-radius: 4px;
+        display: flex; align-items: center; justify-content: center; font-size: 28px;
+        background: rgba(127,127,127,.15);
+    }
+    .am-main { flex: 1; min-width: 0; }
+    .am-name { width: 100%; max-width: none; padding: 4px 6px; }
+    .am-meta { font-size: 12px; opacity: .75; margin-top: 3px; word-break: break-word; }
+    .am-bar { height: 6px; background: rgba(127,127,127,.25); border-radius: 3px; overflow: hidden; margin-top: 4px; display: none; }
+    .am-bar > div { height: 100%; width: 0; background: indianred; transition: width .15s; }
+    .am-item.done .am-meta { color: #4caf50; opacity: 1; }
+    .am-item.failed .am-meta { color: #e57373; opacity: 1; }
+    .am-remove { flex: 0 0 auto; }
+    .am-buttons { margin-top: 14px; }
+    .am-summary { margin-left: 10px; }
+</style>
+
+@section scripts {
+    <script src="@Url.Content("~/Scripts/upload-queue.js")"></script>
+    <script>
+        (function () {
+            const Q = window.UploadQueue;
+            const uploadUrl = '@Url.Action("AddMediaChunk", "Media")';
+            const maxBytes = @MediaManager.Models.SiteSettings.MaxUploadBytes; // MaxUploadMB in Site.config
+            const foldersUrl = '@Url.Action("GetFolders", "Media")';
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            const folderInput = document.getElementById('folderInput');
+            const fileInput = document.getElementById('fileInput');
+            const dropZone = document.getElementById('dropZone');
+            const queueEl = document.getElementById('queue');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const clearDoneBtn = document.getElementById('clearDoneBtn');
+            const summary = document.getElementById('summary');
+
+            let items = [];          // { file, el, status: 'pending' | 'uploading' | 'done' | 'failed', thumbUrl }
+            let uploading = false;
+
+            // Folder suggestions (the box still accepts a brand-new folder)
+            fetch(foldersUrl + '?v=' + Date.now(), { credentials: 'same-origin' })
+                .then(r => r.ok ? r.json() : [])
+                .then(list => {
+                    const dl = document.getElementById('folderList');
+                    (list || []).forEach(f => { const o = document.createElement('option'); o.value = f; dl.appendChild(o); });
+                })
+                .catch(() => { });
+
+            function el(tag, cls, text) {
+                const e = document.createElement(tag);
+                if (cls) e.className = cls;
+                if (text != null) e.textContent = text;
+                return e;
+            }
+
+            function addFiles(fileList) {
+                Array.from(fileList).forEach(file => {
+                    const row = el('div', 'am-item');
+
+                    let thumb, thumbUrl = null;
+                    if (Q.isImage(file) && !/\.heic$/i.test(file.name)) {
+                        thumb = el('img', 'am-thumb');
+                        thumbUrl = URL.createObjectURL(file);
+                        thumb.src = thumbUrl;
+                    } else {
+                        thumb = el('div', 'am-thumb', Q.isVideo(file) ? '🎬' : Q.isAudio(file) ? '🎵' : Q.isImage(file) ? '🖼️' : '📄');
+                    }
+
+                    const main = el('div', 'am-main');
+                    const name = el('input', 'am-name');
+                    name.type = 'text';
+                    name.value = file.name;
+                    name.title = 'File name to save as';
+                    const meta = el('div', 'am-meta', Q.formatSize(file.size));
+                    const bar = el('div', 'am-bar');
+                    bar.appendChild(el('div'));
+                    main.append(name, meta, bar);
+
+                    const remove = el('button', 'am-remove btn btn-default btn-sm', '✕');
+                    remove.type = 'button';
+                    remove.title = 'Remove from the list';
+
+                    row.append(thumb, main, remove);
+                    queueEl.appendChild(row);
+
+                    const item = { file, el: row, status: 'pending', thumbUrl };
+                    remove.addEventListener('click', () => {
+                        if (item.status === 'uploading') return;
+                        removeItem(item);
+                    });
+                    items.push(item);
+
+                    // Too big: say so now instead of after sending it
+                    if (file.size > maxBytes)
+                        setStatus(item, 'rejected', 'Too big: the limit is ' + Q.formatSize(maxBytes) + ' per file');
+                });
+                fileInput.value = ''; // so picking the same file again still fires "change"
+                refresh();
+            }
+
+            function removeItem(item) {
+                if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl);
+                item.el.remove();
+                items = items.filter(i => i !== item);
+                refresh();
+            }
+
+            function setStatus(item, status, message) {
+                item.status = status;
+                item.el.classList.remove('done', 'failed');
+                if (status === 'done') item.el.classList.add('done');
+                if (status === 'failed' || status === 'rejected') item.el.classList.add('failed');
+                item.el.querySelector('.am-meta').textContent = Q.formatSize(item.file.size) + (message ? ' · ' + message : '');
+                item.el.querySelector('.am-bar').style.display = status === 'uploading' ? 'block' : 'none';
+                item.el.querySelector('.am-name').disabled = status === 'uploading' || status === 'done';
+                item.el.querySelector('.am-remove').disabled = status === 'uploading';
+            }
+
+            function refresh() {
+                const todo = items.filter(i => i.status === 'pending' || i.status === 'failed').length;
+                const done = items.filter(i => i.status === 'done').length;
+                const failed = items.filter(i => i.status === 'failed').length;
+
+                uploadBtn.disabled = uploading || todo === 0;
+                uploadBtn.textContent = uploading ? 'Uploading...'
+                    : todo === 0 ? 'Upload'
+                    : failed > 0 && failed === todo ? 'Retry ' + failed + ' failed'
+                    : 'Upload ' + todo + ' file' + (todo === 1 ? '' : 's');
+                clearDoneBtn.style.display = !uploading && done > 0 ? '' : 'none';
+
+                const tooBig = items.filter(i => i.status === 'rejected').length;
+                summary.textContent = items.length === 0 ? ''
+                    : [done ? done + ' uploaded' : '', failed ? failed + ' failed' : '', todo - failed ? (todo - failed) + ' waiting' : '',
+                       tooBig ? tooBig + ' too big' : '']
+                        .filter(Boolean).join(', ');
+            }
+
+            function checkName(name) {
+                if (!name) return 'Enter a file name.';
+                if (name.length >= 75) return 'Name is too long (max 74 characters).';
+                if (/[#\/\\]/.test(name)) return 'Name can\'t contain #, / or \\.';
+                return null;
+            }
+
+            async function uploadAll() {
+                const folder = folderInput.value.trim();
+                if (!folder) { alert('Enter a folder first.'); folderInput.focus(); return; }
+
+                const todo = items.filter(i => i.status === 'pending' || i.status === 'failed');
+                if (!todo.length) return;
+
+                uploading = true;
+                folderInput.disabled = true;
+                refresh();
+
+                for (const item of todo) {
+                    if (!items.includes(item)) continue; // removed meanwhile
+                    const nameInput = item.el.querySelector('.am-name');
+                    const name = nameInput.value.trim();
+                    const problem = checkName(name);
+                    if (problem) { setStatus(item, 'failed', problem); refresh(); continue; }
+
+                    setStatus(item, 'uploading', 'uploading 0%');
+                    const fill = item.el.querySelector('.am-bar > div');
+                    fill.style.width = '0%';
+
+                    const result = await Q.sendChunked(uploadUrl, token, { newFileName: name, folder }, item.file, pct => {
+                        fill.style.width = pct + '%';
+                        item.el.querySelector('.am-meta').textContent = Q.formatSize(item.file.size) + ' · uploading ' + pct + '%';
+                    });
+
+                    if (result.ok && result.data && result.data.fileName) nameInput.value = result.data.fileName;
+                    setStatus(item, result.ok ? 'done' : 'failed', result.ok ? (result.message || 'Uploaded') : result.message);
+                    refresh();
+                }
+
+                uploading = false;
+                folderInput.disabled = false;
+                refresh();
+            }
+
+            fileInput.addEventListener('change', () => addFiles(fileInput.files));
+            uploadBtn.addEventListener('click', uploadAll);
+            clearDoneBtn.addEventListener('click', () => items.filter(i => i.status === 'done').forEach(removeItem));
+
+            // Drag and drop
+            ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
+                e.preventDefault(); dropZone.classList.add('dragover');
+            }));
+            ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, e => {
+                e.preventDefault(); dropZone.classList.remove('dragover');
+            }));
+            dropZone.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+
+            // Don't lose an upload in progress by leaving the page
+            window.addEventListener('beforeunload', e => {
+                if (uploading) { e.preventDefault(); e.returnValue = ''; }
+            });
+        })();
+    </script>
+}

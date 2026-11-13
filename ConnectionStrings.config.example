@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copy to ConnectionStrings.config (git-ignored) in the site's app folder and fill in. -->
+<connectionStrings>
+  <add name="DefaultConnection" connectionString="Data Source=localhost;User ID=YOUR_USER;Password=YOUR_PASSWORD;Initial Catalog=MediaManager" />
+</connectionStrings>

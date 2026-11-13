@@ -1,0 +1,228 @@
+@using MediaManager.Models
+@model FileViewModel
+
+@{
+    ViewBag.Title = "Storage Random";
+    string url = ViewBag.Url;
+    string folder = ViewBag.Folder ?? "";
+    string file = ViewBag.File;
+    string within = ViewBag.Within ?? "";
+    bool isFavorite = ViewBag.IsFavorite == true;
+    bool isCorrupted = ViewBag.IsCorrupted == true;
+
+    // File tools (move, rename, delete, ...) work on files inside a folder, not loose files at the very top.
+    bool hasFolder = folder.Length > 0;
+    string kind = Model == null ? null : MediaPaths.KindOf(Model.FileName);
+    bool isVideo = kind == MediaKind.Video;
+    bool isAudio = kind == MediaKind.Audio;
+
+    string nextUrl = Url.Action("StorageRandom", "Media", within.Length > 0 ? new { within } : null);
+}
+
+<h2 class="text-center">Storage Random</h2>
+
+@Html.Partial("_MediaTools")
+
+@if (TempData["Message"] != null)
+{
+    <p class="text-center text-info">@TempData["Message"]</p>
+}
+
+@* Where random picks come from *@
+<p class="text-center sr-scope">
+    @if (within.Length > 0)
+    {
+        <span>Only picking from <strong style="word-break:break-all;">@within</strong>@(Model != null ? " (" + ((int)ViewBag.PoolCount).ToString("N0") + " files)" : "")</span>
+        <a href="@Url.Action("StorageRandom", "Media")" class="sr-scope-link">Pick from everything</a>
+    }
+    else
+    {
+        <span>Picking from all@(Model != null ? " " + Model.TotalFiles.ToString("N0") : "") files</span>
+        if (hasFolder)
+        {
+            <a href="@Url.Action("StorageRandom", "Media", new { within = folder })" class="sr-scope-link"
+               title="Keep picking random files from this file's folder (and its subfolders)">Stay in this folder</a>
+        }
+    }
+</p>
+
+<div class="text-center sr-nav">
+    <button type="button" id="backBtn" title="Previous file (Left arrow)">&#9664; Back</button>
+    <a id="nextBtn" href="@nextUrl" class="btn btn-success" title="Next random file (Right arrow or Space)">Next random &#9654;</a>
+</div>
+
+@if (Model == null)
+{
+    <p class="text-center">No files found@(within.Length > 0 ? " in " + within : "").</p>
+}
+else
+{
+    @* Filled in by media-common.js: picture, video / audio player, or document *@
+    <div class="media-player" style="text-align:center;" data-src="@url" data-file="@Model.FileName" data-id="mediaElement"
+         data-autoplay="@((isVideo || isAudio) ? "true" : "false")" data-max-height="75vh"></div>
+
+    <h4 class="text-center" style="word-break:break-all; margin-top:12px;">@Model.FileName</h4>
+
+    <div class="media-actions text-center">
+        @if (hasFolder)
+        {
+            <button id="favBtn" class="favBtn@(isFavorite ? " is-favorite" : "")" data-favorite="@(isFavorite ? "true" : "false")">
+                @Html.Raw(isFavorite ? "&#9733; Favorite" : "&#9734; Favorite")
+            </button>
+            <button id="moveBtn">Move</button>
+            <button id="renameBtn">Rename</button>
+            if (isCorrupted)
+            {
+                if (isVideo)
+                {
+                    <button id="fixBtn">Fix File</button>
+                }
+                <button id="unmarkBtn" title="Clear the Corrupted flag">Unmark Corrupted</button>
+            }
+            else
+            {
+                <button id="corruptedBtn">Mark Corrupted</button>
+            }
+            <button id="deleteBtn" title="Move to the Recycle Bin (restorable)">Delete</button>
+        }
+        <form method="post" action="@Url.Action("MarkForDeletion", "Media")" class="d-inline" style="display:inline;">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="fileName" value="@Model.FileName" />
+            <input type="hidden" name="within" value="@within" />
+            <button type="submit" title="Flag it for later and go to the next file (the file is not deleted)">Mark for Deletion</button>
+        </form>
+        <a href="@url" download="@Model.FileName" style="margin-left:6px;">Download</a>
+    </div>
+
+    <p class="text-center" style="margin-top:8px;">
+        @if (hasFolder)
+        {
+            @Html.ActionLink("Open folder in Gallery", "Gallery", "Media", new { folder }, null)
+            <span style="opacity:.5;"> | </span>
+            @Html.ActionLink("Open in View", "ViewMedia", "Media", new { folder, file }, null)
+        }
+        else
+        {
+            <span style="opacity:.7;">This file is at the top of the media folder, so Move / Rename / Delete aren't available here.</span>
+        }
+    </p>
+
+    <div class="file-info" style="max-width:600px; margin:20px auto 0; padding:15px; border:1px solid #ccc; border-radius:6px;">
+        <h4 style="margin-top:0;">File info</h4>
+        <table class="table table-condensed" style="margin-bottom:0;">
+            <tr><th style="width:150px;">Folder</th><td style="word-break:break-all;">@(hasFolder ? folder : "(top folder)")</td></tr>
+            <tr><th>Type</th><td>@Model.FileType (@Model.FileExtension.ToLowerInvariant())</td></tr>
+            <tr><th>Size</th><td>@Model.FileSizeFormatted</td></tr>
+            <tr id="dimensionsRow" style="display:none;"><th>@(isVideo ? "Resolution" : "Dimensions")</th><td id="dimensions"></td></tr>
+            @if (isVideo || isAudio)
+            {
+                <tr id="durationRow" style="display:none;"><th>Length</th><td id="duration"></td></tr>
+            }
+            <tr><th>Created</th><td>@Model.CreatedDate.ToString("yyyy-MM-dd HH:mm")</td></tr>
+            <tr><th>Modified</th><td>@Model.LastModified.ToString("yyyy-MM-dd HH:mm")</td></tr>
+            <tr><th>Last opened</th><td>@Model.LastAccessed.ToString("yyyy-MM-dd HH:mm")</td></tr>
+            <tr><th>Files in folder</th><td>@Model.FilesInDirectory</td></tr>
+            <tr><th>Path</th><td style="word-break:break-all; opacity:.8;">@Model.FullPath</td></tr>
+        </table>
+        <p style="margin:10px 0 0; font-size:12px; opacity:.7;">
+            Keys: &rarr; or Space next random, &larr; back@((isVideo || isAudio) ? ", J / K / L back 10s / play-pause / forward 10s" : "")
+        </p>
+    </div>
+}
+
+<style>
+    .sr-scope { opacity: .85; }
+    .sr-scope-link { margin-left: 8px; }
+    .sr-nav { margin: 6px 0 14px; }
+    .sr-nav > * { margin: 0 4px; }
+    .media-actions > * { margin: 3px 2px; }
+</style>
+
+@section scripts {
+    <script src="@Url.Content("~/Scripts/media-common.js")"></script>
+    <script>
+        (function () {
+            const T = window.MediaTools;
+            const folder = @Html.Raw(Json.Encode(folder));
+            const file = @Html.Raw(Json.Encode(file));
+            const nextUrl = @Html.Raw(Json.Encode(nextUrl));
+
+            function goNext() { window.location.href = nextUrl; }
+
+            // Back only makes sense if there's somewhere to go back to
+            if (window.history.length <= 1) $('#backBtn').prop('disabled', true);
+            $('#backBtn').on('click', () => window.history.back());
+
+            // Keys: right arrow / space = next random, left arrow = back
+            document.addEventListener('keydown', function (e) {
+                if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'VIDEO', 'AUDIO'].includes(e.target.tagName)) return;
+                if ($('#renameModal').is(':visible') || $('#moveModal').is(':visible')) return;
+                if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goNext(); }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); window.history.back(); }
+            });
+
+            if (!file) return;
+
+            $('#favBtn').on('click', function () {
+                const $btn = $(this);
+                const makeFavorite = $btn.attr('data-favorite') !== 'true';
+                T.setFavorite(folder, file, makeFavorite).then(fav => {
+                    $btn.attr('data-favorite', fav ? 'true' : 'false')
+                        .toggleClass('is-favorite', fav)
+                        .html(fav ? '&#9733; Favorite' : '&#9734; Favorite');
+                }, () => { });
+            });
+
+            // After Move / Delete the file is gone from here, so carry on to the next random one
+            $('#moveBtn').on('click', () => T.move(folder, file).then(goNext));
+            $('#deleteBtn').on('click', () => T.remove(folder, file).then(goNext));
+
+            // After Rename, stay on the same file under its new name
+            $('#renameBtn').on('click', () => T.rename(folder, file).then(newName => {
+                const u = new URL(window.location.href);
+                u.searchParams.set('file', newName);
+                window.location.replace(u.toString());
+            }));
+
+            $('#corruptedBtn').on('click', () => T.markCorrupted(file).then(() => location.reload()));
+            $('#unmarkBtn').on('click', () => T.unmark(file).then(() => location.reload(), () => { }));
+
+            $('#fixBtn').on('click', function () {
+                const $btn = $(this);
+                T.fix(folder, file, () => $btn.prop('disabled', true).text('Fixing...')).then(
+                    fixed => { if (fixed) location.reload(); },
+                    () => $btn.prop('disabled', false).text('Fix File'));
+            });
+
+            // Dimensions / video length come from the browser once the file has loaded
+            const el = document.getElementById('mediaElement');
+            if (!el) return;
+
+            function showDimensions(w, h) {
+                if (!w || !h) return;
+                document.getElementById('dimensions').textContent = w + ' × ' + h + ' px';
+                document.getElementById('dimensionsRow').style.display = '';
+            }
+
+            function formatDuration(sec) {
+                sec = Math.round(sec);
+                const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+                return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+            }
+
+            if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') {
+                const onMeta = () => {
+                    if (el.tagName === 'VIDEO') showDimensions(el.videoWidth, el.videoHeight);
+                    if (isFinite(el.duration)) {
+                        document.getElementById('duration').textContent = formatDuration(el.duration);
+                        document.getElementById('durationRow').style.display = '';
+                    }
+                };
+                if (el.readyState >= 1) onMeta(); else el.addEventListener('loadedmetadata', onMeta);
+            } else if (el.tagName === 'IMG') {
+                if (el.complete) showDimensions(el.naturalWidth, el.naturalHeight);
+                else el.addEventListener('load', () => showDimensions(el.naturalWidth, el.naturalHeight));
+            }
+        })();
+    </script>
+}

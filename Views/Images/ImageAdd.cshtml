@@ -1,0 +1,181 @@
+﻿@{
+    ViewBag.Title = "Upload images";
+    bool isGuest = MediaManager.Models.Roles.IsGuest(Session);
+    // Where to go once everything has uploaded: guests see the wall, the owner the Guest Uploads manager
+    string doneUrl = isGuest ? Url.Action("ImageViewAll", "Images") : Url.Action("ImageManager", "Images");
+    // GuestMaxUploadMB for guests, MaxUploadMB for the owner (Site.config)
+    long maxBytes = isGuest ? MediaManager.Models.SiteSettings.GuestMaxUploadBytes : MediaManager.Models.SiteSettings.MaxUploadBytes;
+    string maxText = MediaManager.Models.ChunkedUpload.FormatLimit(maxBytes);
+}
+
+<div class="img-add">
+    <h1 class="text-center">Upload images</h1>
+    <hr />
+
+    @* Plain form still works without JavaScript (one image); with JavaScript, several images are sent one at a time. *@
+    @using (Html.BeginForm("ImageAdd", "Images", FormMethod.Post, new { enctype = "multipart/form-data", id = "uploadForm" }))
+    {
+        @Html.AntiForgeryToken()
+        <label class="ia-pick" for="fileInput">
+            <input type="file" name="file" id="fileInput" multiple accept="image/png,image/jpeg,image/gif,image/webp">
+            <strong>Choose images</strong>
+            <span class="ia-hint">You can pick several at once (.jpg, .png, .gif, .webp, up to @maxText each)</span>
+        </label>
+
+        <div id="previews" class="ia-grid"></div>
+
+        <p>
+            <input type="text" name="description" id="descriptionInput" placeholder="Your name or a caption"
+                   maxlength="200" class="ia-caption">
+            <span class="ia-hint">Used for every image in this upload.</span>
+        </p>
+        <button type="submit" id="submitButton" class="btn btn-success">Upload</button>
+        <span id="summary" style="margin-left:10px;"></span>
+    }
+</div>
+
+<style>
+    .img-add { max-width: 700px; margin: 0 auto; text-align: center; }
+    .ia-pick {
+        display: block; cursor: pointer; font-weight: normal; padding: 22px 12px; margin-bottom: 12px;
+        border: 2px dashed rgba(127,127,127,.6); border-radius: 8px;
+    }
+    .ia-pick input[type=file] { display: none; }
+    .ia-hint { display: block; font-size: 12px; opacity: .7; margin-top: 4px; }
+    .ia-caption { padding: 6px; width: 320px; max-width: 100%; }
+
+    .ia-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .ia-tile { position: relative; aspect-ratio: 1 / 1; border-radius: 6px; overflow: hidden; background: rgba(127,127,127,.15); }
+    .ia-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .ia-remove {
+        position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; padding: 0; line-height: 24px;
+        border-radius: 50%; border: none; background: rgba(0,0,0,.65) !important; color: #fff !important;
+    }
+    .ia-status {
+        position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 4px; font-size: 12px;
+        background: rgba(0,0,0,.65); color: #fff; display: none;
+    }
+    .ia-bar { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: indianred; transition: width .15s; }
+    .ia-tile.done .ia-status { display: block; background: rgba(46,125,50,.85); }
+    .ia-tile.failed .ia-status { display: block; background: rgba(183,28,28,.85); }
+    .ia-tile.uploading .ia-status { display: block; }
+</style>
+
+@section scripts {
+    <script src="@Url.Content("~/Scripts/upload-queue.js")"></script>
+    <script>
+        (function () {
+            const Q = window.UploadQueue;
+            const form = document.getElementById('uploadForm');
+            const uploadUrl = '@Url.Action("ImageAddChunk", "Images")';
+            const maxBytes = @maxBytes;
+            const doneUrl = @Html.Raw(Json.Encode(doneUrl));
+            const token = form.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            const fileInput = document.getElementById('fileInput');
+            const previews = document.getElementById('previews');
+            const caption = document.getElementById('descriptionInput');
+            const submitButton = document.getElementById('submitButton');
+            const summary = document.getElementById('summary');
+
+            let items = [];   // { file, el, url, status: 'pending' | 'uploading' | 'done' | 'failed' }
+            let uploading = false;
+
+            function addFiles(fileList) {
+                Array.from(fileList).forEach(file => {
+                    const tile = document.createElement('div');
+                    tile.className = 'ia-tile';
+                    const url = URL.createObjectURL(file);
+                    tile.innerHTML = '<img alt=""><button type="button" class="ia-remove" title="Remove">✕</button>'
+                        + '<div class="ia-status"></div><div class="ia-bar"></div>';
+                    tile.querySelector('img').src = url;
+                    previews.appendChild(tile);
+
+                    const item = { file, el: tile, url, status: 'pending' };
+                    tile.querySelector('.ia-remove').addEventListener('click', () => {
+                        if (item.status === 'uploading') return;
+                        URL.revokeObjectURL(url);
+                        tile.remove();
+                        items = items.filter(i => i !== item);
+                        refresh();
+                    });
+                    items.push(item);
+
+                    // Too big: say so now instead of after sending it
+                    if (file.size > maxBytes) setStatus(item, 'rejected', 'Too big (max ' + Q.formatSize(maxBytes) + ')');
+                });
+                fileInput.value = ''; // so picking the same image again still works
+                refresh();
+            }
+
+            function setStatus(item, status, text) {
+                item.status = status;
+                item.el.classList.remove('uploading', 'done', 'failed');
+                item.el.classList.add(status === 'rejected' ? 'failed' : status);
+                item.el.querySelector('.ia-status').textContent = text || '';
+                item.el.querySelector('.ia-status').title = text || '';
+                item.el.querySelector('.ia-remove').style.display = status === 'uploading' || status === 'done' ? 'none' : '';
+            }
+
+            function refresh() {
+                const todo = items.filter(i => i.status === 'pending' || i.status === 'failed').length;
+                const done = items.filter(i => i.status === 'done').length;
+                const failed = items.filter(i => i.status === 'failed').length;
+                submitButton.disabled = uploading;
+                submitButton.textContent = uploading ? 'Uploading...'
+                    : todo > 1 ? 'Upload ' + todo + ' images' : 'Upload';
+                const tooBig = items.filter(i => i.status === 'rejected').length;
+                summary.textContent = [done ? done + ' uploaded' : '', failed ? failed + ' failed' : '', tooBig ? tooBig + ' too big' : '']
+                    .filter(Boolean).join(', ');
+            }
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                if (uploading) return;
+
+                const todo = items.filter(i => i.status === 'pending' || i.status === 'failed');
+                if (!todo.length) {
+                    alert(!items.length ? 'Please choose an image.'
+                        : items.some(i => i.status === 'rejected') ? 'Remove the images that are too big (✕), or choose others.'
+                        : 'Everything is already uploaded.');
+                    return;
+                }
+                const description = caption.value.trim();
+                if (!description) { alert('Please enter a name or caption.'); caption.focus(); return; }
+
+                uploading = true;
+                caption.disabled = true;
+                refresh();
+
+                for (const item of todo) {
+                    if (!items.includes(item)) continue;
+                    setStatus(item, 'uploading', '0%');
+                    const bar = item.el.querySelector('.ia-bar');
+                    const result = await Q.sendChunked(uploadUrl, token, { description }, item.file, pct => {
+                        bar.style.width = pct + '%';
+                        item.el.querySelector('.ia-status').textContent = pct + '%';
+                    });
+                    bar.style.width = '0';
+                    setStatus(item, result.ok ? 'done' : 'failed', result.ok ? '✓ Uploaded' : result.message);
+                    refresh();
+                }
+
+                uploading = false;
+                caption.disabled = false;
+                refresh();
+
+                // All good: show the uploads; otherwise stay so the failed ones can be retried
+                if (items.every(i => i.status === 'done')) {
+                    summary.textContent = 'All uploaded!';
+                    setTimeout(() => window.location.href = doneUrl, 1200);
+                }
+            });
+
+            fileInput.addEventListener('change', () => addFiles(fileInput.files));
+
+            window.addEventListener('beforeunload', e => {
+                if (uploading) { e.preventDefault(); e.returnValue = ''; }
+            });
+        })();
+    </script>
+}

@@ -1,0 +1,106 @@
+﻿body {
+    padding-top: 0;   /* navbar is static-top, so no room needs to be reserved for it */
+    padding-bottom: 20px;
+    font-family: Arial, sans-serif;
+}
+
+/* Set padding to keep content from hitting the edges */
+.body-content {
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+/* Override the default bootstrap behavior where horizontal description lists
+   will truncate terms that are too long to fit in the left column
+*/
+.dl-horizontal dt {
+    white-space: normal;
+}
+
+/* Set width on the form input elements since they're 100% wide by default */
+input,
+select,
+textarea {
+    max-width: 280px;
+}
+
+hr {
+    border: 0;
+    margin: 20px 0;
+}
+
+/* Shared sizing for form controls; colors come from the theme (dark-mode.css) */
+input, textarea, select, button {
+    padding: 8px;
+    border-radius: 4px;
+}
+
+input[type="submit"], button {
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+/* Theme switch in the navbar */
+#themeToggle {
+    cursor: pointer;
+}
+
+/* The site name sits at the far right (customized in bootstrap.css); keep a gap between it
+   and the theme switch / Log out links that sit just to its left. */
+@media (min-width: 768px) {
+    .navbar-nav.navbar-right {
+        margin-right: 20px;
+    }
+}
+
+/* ---------- Audio and documents (Scripts/media-common.js mediaHtml) ---------- */
+.kind-icon {
+    font-size: 42px;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.audio-card,
+.doc-card {
+    display: inline-block;
+    width: 500px;
+    max-width: 100%;
+    padding: 20px 16px;
+    border: 1px solid rgba(127, 127, 127, .4);
+    border-radius: 8px;
+    background: rgba(127, 127, 127, .08);
+    text-align: center;
+}
+
+    .audio-card audio {
+        width: 100%;
+    }
+
+.doc-frame {
+    display: block;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    border: 1px solid rgba(127, 127, 127, .4);
+    border-radius: 6px;
+    background: #fff;
+}
+
+.doc-text {
+    max-width: 1000px;
+    margin: 0 auto;
+    overflow: auto;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: rgba(127, 127, 127, .1);
+    color: inherit;
+    border: 1px solid rgba(127, 127, 127, .4);
+}
+
+.doc-note {
+    font-size: 12px;
+    opacity: .75;
+    margin-top: 6px;
+}

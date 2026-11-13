@@ -1,0 +1,571 @@
+﻿@{
+    string galleryFolder = ViewBag.Folder ?? "";
+    string[] parts = galleryFolder.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+    var subfolders = ViewBag.Subfolders as List<MediaManager.Controllers.MediaController.SubfolderInfo>
+                     ?? new List<MediaManager.Controllers.MediaController.SubfolderInfo>();
+    ViewBag.Title = parts.Length > 0 ? parts[parts.Length - 1] : galleryFolder;
+}
+
+@* Where you are: every part goes to that folder's gallery *@
+<p class="crumbs">
+    @Html.ActionLink("Home", "Index", "Home")
+    @for (int i = 0; i < parts.Length; i++)
+    {
+        <span class="crumb-sep">&rsaquo;</span>
+        if (i < parts.Length - 1)
+        {
+            @Html.ActionLink(parts[i], "Gallery", "Media", new { folder = string.Join("/", parts.Take(i + 1)) }, null)
+        }
+        else
+        {
+            <strong>@parts[i]</strong>
+        }
+    }
+</p>
+
+<h2 style="word-break:break-word;">@ViewBag.Title</h2>
+<h4 id="secretCount">Total Media: ???</h4>
+
+@if (subfolders.Any())
+{
+    <div class="subfolders">
+        @foreach (var s in subfolders)
+        {
+            <a class="subfolder-chip" href="@Url.Action("Gallery", "Media", new { folder = galleryFolder + "/" + s.Name })"
+               title="@s.FileCount file@(s.FileCount == 1 ? "" : "s")@(s.HasSubfolders ? ", and more folders inside" : "")">
+                &#128193; @s.Name <span class="chip-count">@s.FileCount@(s.HasSubfolders ? "+" : "")</span>
+            </a>
+        }
+    </div>
+}
+
+@Html.Partial("_MediaTools")
+
+<div style="text-align:center; margin-bottom:15px;">
+    <input type="text" id="searchBox" placeholder="Search files..."
+           style="padding:8px; width:250px; border-radius:5px;" />
+    <button id="searchBtn" style="padding:8px 15px;">Search</button>
+    <button id="clearSearchBtn" style="padding:8px 15px;">Clear</button>
+
+    <label for="sortSelect" style="margin-left:10px; font-weight:normal;">Sort:</label>
+    <select id="sortSelect" style="padding:7px; border-radius:5px;">
+        <option value="random">Shuffled</option>
+        <option value="name">Name A &rarr; Z</option>
+        <option value="name-desc">Name Z &rarr; A</option>
+    </select>
+
+    @if (subfolders.Any())
+    {
+        <label class="subs-toggle" title="Also show (and play) everything in the subfolders, mixed in with this folder's files">
+            <input type="checkbox" id="includeSubs" /> Include subfolders
+        </label>
+    }
+</div>
+
+<div class="gallery-tools" style="text-align:center; margin-bottom: 15px;">
+    <button id="refreshGalleryBtn">Refresh Gallery</button>
+    <button id="selectModeBtn" title="Tick files to download several at once">&#9745; Select</button>
+    <button id="downloadFolderBtn" title="Download everything in this folder as one ZIP">&#11015; Download folder</button>
+    <button id="deleteFolderBtn"
+            title="Delete this folder: empty folders are removed, anything else goes to the Recycle Bin">&#128465; Delete folder</button>
+</div>
+
+@* "Download folder": this folder only, or with its subfolders *@
+<div id="downloadFolderModal" class="modal" style="display:none;">
+    <div class="modal-content" style="padding:15px; max-width:460px; margin:10vh auto;">
+        <h3 style="margin-top:0;">Download folder</h3>
+        <p id="dlInfo" style="opacity:.85;">Checking...</p>
+        <div id="dlChoices" style="display:none;">
+            <p><button type="button" id="dlHereBtn" style="width:100%;"></button></p>
+            <p id="dlSubRow"><button type="button" id="dlSubBtn" style="width:100%;"></button></p>
+        </div>
+        <p style="font-size:12px; opacity:.7;">One ZIP file. It starts straight away; big folders take a while (the browser shows how much has arrived).</p>
+        <button type="button" onclick="$('#downloadFolderModal').hide();">Cancel</button>
+    </div>
+</div>
+
+@* Shown while selecting: stays at the bottom of the screen *@
+<div id="selBar" class="sel-bar" style="display:none;">
+    <span id="selCount">0 selected</span>
+    <button type="button" id="selDownloadBtn" class="btn btn-success btn-sm" disabled>&#11015; Download</button>
+    <button type="button" id="selAllBtn" class="btn btn-default btn-sm" title="Tick every file shown so far">Select all shown</button>
+    <button type="button" id="selClearBtn" class="btn btn-default btn-sm">Clear</button>
+    <button type="button" id="selDoneBtn" class="btn btn-default btn-sm">Done</button>
+</div>
+
+<style>
+    .gallery-tools button { padding: 8px 15px; margin: 3px; }
+
+    /* Select mode: a tick box on every item */
+    .sel-box { display: none; font-weight: normal; cursor: pointer; padding: 6px 12px; margin-bottom: 6px;
+               border: 1px solid rgba(127,127,127,.5); border-radius: 6px; user-select: none; }
+    .sel-box input { width: 20px; height: 20px; vertical-align: middle; margin: 0 6px 0 0; }
+    body.selecting .sel-box { display: inline-block; }
+    .media-item.is-selected { outline: 3px solid #5cb85c; outline-offset: 6px; border-radius: 4px; }
+    .sel-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; padding: 10px; text-align: center;
+               background: rgba(30,30,30,.95); color: #eee; box-shadow: 0 -2px 10px rgba(0,0,0,.4); }
+    .sel-bar > * { margin: 2px 4px; }
+    body.selecting { padding-bottom: 70px; } /* room for the bar */
+
+    /* Folder path and subfolders */
+    .crumbs { margin: 10px 0 0; word-break: break-word; }
+    .crumb-sep { margin: 0 6px; opacity: .6; }
+    .subfolders { margin: 4px 0 14px; }
+    .subfolder-chip { display: inline-block; margin: 3px; padding: 5px 10px; border-radius: 14px; text-decoration: none !important;
+                      border: 1px solid rgba(127,127,127,.5); }
+    .subfolder-chip:hover { background: rgba(127,127,127,.2); }
+    .chip-count { opacity: .65; font-size: 12px; margin-left: 3px; }
+    .subs-toggle { margin-left: 12px; font-weight: normal; white-space: nowrap; cursor: pointer; }
+    .item-sub { margin: -6px 0 8px; font-size: 13px; opacity: .8; }
+</style>
+
+<div id="imageContainer" style="text-align: center;"></div>
+
+<div id="loading" style="text-align: center; display: none;">
+    <p>Loading...</p>
+</div>
+
+<div style="text-align: center; margin: 20px;">
+    <button id="loadMoreBtn" style="padding: 10px 20px;">Load More</button>
+</div>
+
+@section scripts {
+    <script src="@Url.Content("~/Scripts/media-common.js")"></script>
+    <script>
+        const T = window.MediaTools;
+        let CACHE_BUSTER = Date.now();
+        let isLoading = false;
+        let searchTerm = "";
+        let hasMore = true;
+        let totalAvailable = 0; // total number matching current search
+
+        // Paging: ask for "the files after the last one we have" (not "page 7"), so nothing repeats or is
+        // skipped when files are deleted / moved / added while scrolling. `shown` is a safety net on top.
+        let cursor = null;
+        const shown = new Set();
+
+        // Sort order, remembered in this browser
+        const SORT_KEY = "gallerySort";
+        let sortOrder = localStorage.getItem(SORT_KEY) || "random";
+        if (!["random", "name", "name-desc"].includes(sortOrder)) sortOrder = "random";
+        const folder = @Html.Raw(Json.Encode(ViewBag.Folder ?? ""));
+
+        // This tab's shuffle for this folder: the same number always gives the same order, so it survives
+        // the server re-reading the folder, and going to a file and pressing Back. Refresh Gallery picks a new one.
+        const SEED_KEY = 'gallerySeed:' + folder.toLowerCase();
+        function newSeed() {
+            const seed = Math.floor(Math.random() * 2147483647);
+            try { sessionStorage.setItem(SEED_KEY, seed); } catch (e) { }
+            return seed;
+        }
+        let shuffleSeed = Number(sessionStorage.getItem(SEED_KEY)) || newSeed();
+        const MEDIA_BASE = @Html.Raw(Json.Encode(ViewBag.MediaBaseUrl ?? "")); // e.g. "/media/Videos/Cats"
+
+        // "Include subfolders": also show everything in the subfolders, remembered per folder in this browser
+        const SUBS_KEY = 'gallerySubs:' + folder.toLowerCase();
+        let includeSubs = $('#includeSubs').length > 0 && localStorage.getItem(SUBS_KEY) === '1';
+
+        // Each item is identified by its path from this folder: "a.jpg", or "Kittens/a.jpg" from a subfolder.
+        function pathUrl(path) {
+            return MEDIA_BASE + '/' + path.split('/').map(encodeURIComponent).join('/');
+        }
+        function mediaUrl(path) {
+            return `${pathUrl(path)}?v=${CACHE_BUSTER}`;
+        }
+
+        function updateCount() {
+            $('#secretCount').text(`Total Media: ${totalAvailable}` + (includeSubs ? ' (with subfolders)' : ''));
+        }
+
+        function favButtonHtml(file, isFavorite) {
+            return `<button class="favBtn${isFavorite ? " is-favorite" : ""}" data-file="${T.escapeHtml(file)}" data-favorite="${isFavorite}"
+                        title="${isFavorite ? "Remove from Favorites" : "Add to Favorites"}">${isFavorite ? "&#9733; Favorite" : "&#9734; Favorite"}</button>`;
+        }
+
+        // The picture / player / document preview for one gallery item
+        function itemMediaHtml(path) {
+            return T.mediaHtml(mediaUrl(path), path, { compact: true, maxHeight: '400px', sizeAttrs: 'width="500" height="400"' });
+        }
+
+        function joinPath(sub, name) { return sub ? sub + '/' + name : name; }
+
+        function isVideoFile(file) {
+            return T.kindOf(file) === 'video';
+        }
+
+        // Corrupted: "Fix File" (videos only, it runs FFmpeg) + "Unmark" in case it was flagged by mistake.
+        function corruptedButtonHtml(file, isCorrupted) {
+            const safe = T.escapeHtml(file);
+            return `<span class="corruptedTools">${isCorrupted
+                ? (isVideoFile(file) ? `<button class="fixBtn" data-file="${safe}">Fix File</button> ` : '')
+                  + `<button class="unmarkBtn" data-file="${safe}" title="Clear the Corrupted flag">Unmark Corrupted</button>`
+                : `<button class="corruptedBtn" data-file="${safe}">Mark Corrupted</button>`}</span>`;
+        }
+
+        // Each .media-item carries: data-file (its name), data-folder (its own folder: this one or a
+        // subfolder), data-sub (the subfolder part, "" for this folder) and data-key (sub/name, unique here).
+        // NOTE: read them with .attr(), not .data(): jQuery's .data() turns names like "123" into numbers
+        // and caches old values after a rename.
+        function itemOf($el) { return $el.closest('.media-item'); }
+        function itemFile($el) { return itemOf($el).attr('data-file'); }
+        function itemFolder($el) { return itemOf($el).attr('data-folder'); }
+        function itemKey($el) { return itemOf($el).attr('data-key'); }
+
+        function removeItem($item) {
+            selected.delete($item.attr('data-key')); // moved / deleted: no longer downloadable from here
+            updateSelBar();
+            $item.fadeOut(200, function () {
+                $(this).remove();
+                totalAvailable = Math.max(0, totalAvailable - 1);
+                updateCount();
+            });
+        }
+
+        // Bumped on every reset (new search/sort/refresh) so answers to older requests are ignored.
+        let loadGeneration = 0;
+
+        function loadImages(reset = false) {
+            // A reset (new search/sort) always goes through, even if a page is still loading.
+            if (!reset && (isLoading || !hasMore)) return;
+
+            const gen = reset ? ++loadGeneration : loadGeneration;
+            isLoading = true;
+            $('#loading').show().text("Loading...");
+
+            if (reset) {
+                cursor = null;
+                shown.clear();
+                hasMore = true;
+                totalAvailable = 0;
+                $('#imageContainer').empty();
+                $('#loadMoreBtn').show();
+            }
+            const first = cursor === null;
+
+            const params = { folder, search: searchTerm, sort: sortOrder, seed: shuffleSeed, subfolders: includeSubs, v: Date.now() };
+            if (cursor !== null) params.after = cursor;
+
+            $.getJSON('@Url.Action("GetMedia", "Media")', params)
+                .done(function (response) {
+                    if (gen !== loadGeneration) return; // a newer search/sort replaced this request
+
+                    const data = response.Files || [];
+                    totalAvailable = response.TotalCount || 0;
+                    updateCount();
+
+                    if (data.length === 0 && first) {
+                        $('#imageContainer').html("<p>No results found.</p>");
+                        $('#loadMoreBtn').hide();
+                        hasMore = false;
+                        $('#loading').hide();
+                        return;
+                    }
+
+                    // Carry on after the last file of this batch next time
+                    if (data.length) cursor = data[data.length - 1].Path;
+                    hasMore = !!response.HasMore && data.length > 0;
+
+                    let added = 0;
+                    data.forEach(function (item) {
+                        const file = item.FileName;
+                        const key = item.Path;           // "a.jpg" or "Kittens/a.jpg"
+                        const sub = item.Subfolder || '';
+                        if (shown.has(key)) return; // never show a file twice
+                        shown.add(key);
+                        added++;
+                        const safe = T.escapeHtml(file);
+
+                        const isSel = selected.has(key);
+                        const $item = $(`
+                            <div class="media-item${isSel ? ' is-selected' : ''}" data-file="${safe}" data-key="${T.escapeHtml(key)}"
+                                 data-folder="${T.escapeHtml(item.Folder)}" data-sub="${T.escapeHtml(sub)}" data-size="${Number(item.Size) || 0}"
+                                 style="margin-bottom: 25px; border-bottom: 1px solid #555; padding-bottom: 15px;">
+                                <label class="sel-box"><input type="checkbox" class="selBox"${isSel ? ' checked' : ''}>Select</label>
+                                <h4>${safe}</h4>
+                                ${sub ? `<div class="item-sub">in <a href="${T.escapeHtml(T.galleryUrl(item.Folder))}">&#128193; ${T.escapeHtml(sub)}</a></div>` : ''}
+
+                                <div class="media-body">${itemMediaHtml(key)}</div>
+
+                                <div class="media-actions" style="margin-top: 10px;">
+                                    ${favButtonHtml(file, !!item.Favorite)}
+                                    <button class="viewBtn" data-file="${safe}">${T.kindOf(file) === 'document' ? 'Open' : 'View'}</button>
+                                    <button class="downloadBtn" data-file="${safe}">Download</button>
+                                    <button class="moveBtn" data-file="${safe}">Move</button>
+                                    <button class="renameBtn" data-file="${safe}">Rename</button>
+                                    ${corruptedButtonHtml(file, !!item.Corrupted)}
+                                    <button class="deleteBtn" data-file="${safe}">Delete</button>
+                                </div>
+                            </div>`.trim());
+                        $('#imageContainer').append($item);
+                        T.loadTextPreviews($item); // .txt / .md show their first lines
+                    });
+
+                    if (!hasMore) {
+                        $('#loadMoreBtn').hide();
+                        $('#loading').text("No more results.").show();
+                    } else if (added === 0) {
+                        setTimeout(() => loadImages(false), 0); // whole batch was already on screen: get the next one
+                    }
+                    T.pauseVideosOutOfView();
+                })
+                .fail(function (xhr) {
+                    console.error("GetMedia failed:", xhr.status, xhr.responseText);
+                })
+                .always(function () {
+                    if (gen !== loadGeneration) return;
+                    isLoading = false;
+                    if (hasMore) $('#loading').hide();
+                });
+        }
+
+        function setupInfiniteScroll() {
+            $(window).off('scroll.infinite').on('scroll.infinite', function () {
+                const scrollTop = window.scrollY || document.documentElement.scrollTop;
+                const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+                const docHeight = document.documentElement.scrollHeight;
+
+                if (!isLoading && hasMore && scrollTop + windowHeight >= docHeight - 150) {
+                    loadImages(false);
+                }
+            });
+        }
+
+        $(document).ready(function () {
+            $('#sortSelect').val(sortOrder).on('change', function () {
+                sortOrder = $(this).val();
+                localStorage.setItem(SORT_KEY, sortOrder);
+                loadImages(true);
+            });
+
+            $('#includeSubs').prop('checked', includeSubs).on('change', function () {
+                includeSubs = this.checked;
+                try { localStorage.setItem(SUBS_KEY, includeSubs ? '1' : '0'); } catch (e) { }
+                loadImages(true);
+            });
+
+            loadImages(true);
+            setupInfiniteScroll();
+
+            $('#loadMoreBtn').click(() => loadImages(false));
+
+            $('#searchBtn').click(function () {
+                searchTerm = $('#searchBox').val().trim();
+                loadImages(true);
+            });
+
+            $('#searchBox').on('keydown', function (e) {
+                if (e.key === "Enter") { e.preventDefault(); $('#searchBtn').click(); }
+            });
+
+            $('#clearSearchBtn').click(function () {
+                $('#searchBox').val('');
+                searchTerm = "";
+                loadImages(true);
+            });
+
+            $('#refreshGalleryBtn').click(() => {
+                T.post(window.MEDIA_URLS.clearCache, { folder }).then(() => {
+                    CACHE_BUSTER = Date.now();
+                    shuffleSeed = newSeed(); // a new shuffle
+                    loadImages(true);
+                }, () => { });
+            });
+        });
+
+        // ---------- per-item actions (all edit the page in place, no reload / no scroll jump) ----------
+
+        // Every action works on the file's own folder (this one, or a subfolder when they're included)
+        $(document).on("click", ".favBtn", function () {
+            const $btn = $(this);
+            const file = itemFile($btn);
+            const makeFavorite = $btn.attr("data-favorite") !== "true";
+            T.setFavorite(itemFolder($btn), file, makeFavorite).then(fav => $btn.replaceWith(favButtonHtml(file, fav)), () => { });
+        });
+
+        $(document).on("click", ".viewBtn", function () {
+            window.location.href = T.viewUrl(itemFolder($(this)), itemFile($(this)));
+        });
+
+        $(document).on("click", ".downloadBtn", function () {
+            T.download(pathUrl(itemKey($(this))), itemFile($(this)));
+        });
+
+        $(document).on("click", ".moveBtn", function () {
+            const $item = itemOf($(this));
+            T.move(itemFolder($item), itemFile($item)).then(() => removeItem($item));
+        });
+
+        $(document).on("click", ".renameBtn", function () {
+            const $item = itemOf($(this));
+            const oldName = itemFile($item);
+            const oldKey = itemKey($item);
+            const sub = $item.attr('data-sub') || '';
+            T.rename(itemFolder($item), oldName).then(newName => {
+                const newKey = joinPath(sub, newName);
+                if (selected.has(oldKey)) { selected.set(newKey, selected.get(oldKey)); selected.delete(oldKey); }
+                shown.add(newKey); // its new name may sort later in the order: don't show it again
+                $item.attr('data-file', newName).attr('data-key', newKey);
+                $item.find('h4').text(newName);
+                $item.find('[data-file]').attr('data-file', newName);
+                $item.find('.media-body').html(itemMediaHtml(newKey));
+                T.loadTextPreviews($item);
+                const $view = $item.find('.viewBtn');
+                $view.text(T.kindOf(newName) === 'document' ? 'Open' : 'View');
+            });
+        });
+
+        $(document).on("click", ".corruptedBtn", function () {
+            const $btn = $(this);
+            const file = itemFile($btn);
+            T.markCorrupted(file).then(() => $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, true)));
+        });
+
+        $(document).on("click", ".unmarkBtn", function () {
+            const $btn = $(this);
+            const file = itemFile($btn);
+            T.unmark(file).then(() => $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false)), () => { });
+        });
+
+        $(document).on("click", ".fixBtn", function () {
+            const $btn = $(this);
+            const file = itemFile($btn);
+            T.fix(itemFolder($btn), file, () => $btn.prop("disabled", true).text("Fixing...")).then(
+                fixed => { if (fixed) $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false)); },
+                () => $btn.prop("disabled", false).text("Fix File"));
+        });
+
+        // ---------- select files to download several at once ----------
+        // Ticks are kept by file name, so they survive loading more, searching and re-sorting.
+
+        const selected = new Map(); // item key ("a.jpg" / "Kittens/a.jpg") -> size in bytes
+
+        function formatSize(bytes) {
+            if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
+            if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+            if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+            return bytes + ' bytes';
+        }
+
+        function updateSelBar() {
+            let total = 0;
+            selected.forEach(size => total += size);
+            $('#selCount').text(selected.size + ' selected' + (selected.size ? ' · ' + formatSize(total) : ''));
+            $('#selDownloadBtn').prop('disabled', selected.size === 0);
+        }
+
+        function setSelected($item, on) {
+            const key = $item.attr('data-key');
+            if (on) selected.set(key, Number($item.attr('data-size')) || 0); else selected.delete(key);
+            $item.toggleClass('is-selected', on);
+            $item.find('.selBox').prop('checked', on);
+        }
+
+        function setSelectMode(on) {
+            $('body').toggleClass('selecting', on);
+            $('#selBar').toggle(on);
+            $('#selectModeBtn').html(on ? '&#9745; Selecting...' : '&#9745; Select');
+            updateSelBar();
+        }
+
+        $('#selectModeBtn').on('click', () => setSelectMode(!$('body').hasClass('selecting')));
+        $('#selDoneBtn').on('click', () => setSelectMode(false));
+
+        $(document).on('change', '.selBox', function () {
+            setSelected($(this).closest('.media-item'), this.checked);
+            updateSelBar();
+        });
+
+        $('#selAllBtn').on('click', function () {
+            $('.media-item').each(function () { setSelected($(this), true); });
+            updateSelBar();
+        });
+
+        $('#selClearBtn').on('click', function () {
+            selected.clear();
+            $('.media-item').removeClass('is-selected').find('.selBox').prop('checked', false);
+            updateSelBar();
+        });
+
+        // One file: just download it. Several: one ZIP (a normal form post, so the browser handles the download).
+        $('#selDownloadBtn').on('click', function () {
+            const files = Array.from(selected.keys());
+            if (!files.length) return;
+            if (files.length === 1) return T.download(pathUrl(files[0]), files[0].split('/').pop());
+
+            const form = $('<form method="post" style="display:none;"></form>')
+                .attr('action', '@Url.Action("Selected", "BulkDownload")');
+            form.append($('<input type="hidden" name="__RequestVerificationToken">').val($('input[name="__RequestVerificationToken"]').first().val()));
+            form.append($('<input type="hidden" name="folder">').val(folder));
+            form.append($('<input type="hidden" name="files">').val(files.join('\n')));
+            form.appendTo('body').submit();
+            setTimeout(() => form.remove(), 1000); // removing it straight away can cancel the post in some browsers
+            T.showToast(`Downloading ${files.length} files as a ZIP...`);
+        });
+
+        // ---------- download this whole folder ----------
+        $('#downloadFolderBtn').on('click', function () {
+            $('#dlInfo').text('Checking...');
+            $('#dlChoices').hide();
+            $('#downloadFolderModal').show();
+
+            $.getJSON('@Url.Action("FolderSummary", "BulkDownload")', { folder, v: Date.now() })
+                .done(function (s) {
+                    if (!s || !s.success) return $('#dlInfo').text((s && s.message) || "Couldn't check the folder.");
+                    if (!s.withSubfoldersFiles) return $('#dlInfo').text('There are no files to download in this folder.');
+
+                    const base = '@Url.Action("Folder", "BulkDownload")?folder=' + encodeURIComponent(folder);
+                    const hasSub = s.withSubfoldersFiles > s.files;
+                    $('#dlInfo').text(`"${s.name}"` + (hasSub ? ' has subfolders too.' : ''));
+                    $('#dlHereBtn').text(`This folder only: ${s.files} file${s.files === 1 ? '' : 's'} (${s.size})`)
+                        .prop('disabled', s.files === 0)
+                        .off('click').on('click', () => { $('#downloadFolderModal').hide(); window.location.href = base; });
+                    $('#dlSubRow').toggle(hasSub);
+                    $('#dlSubBtn').text(`With subfolders: ${s.withSubfoldersFiles} files (${s.withSubfoldersSize})`)
+                        .off('click').on('click', () => { $('#downloadFolderModal').hide(); window.location.href = base + '&subfolders=true'; });
+                    $('#dlChoices').show();
+                })
+                .fail(xhr => xhr.status === 401
+                    ? $('#downloadFolderModal').hide()  // the "login expired" bar is showing
+                    : $('#dlInfo').text("Couldn't check the folder (" + xhr.status + ")."));
+        });
+
+        // ---------- delete this whole folder ----------
+        // Empty: a simple confirm. With files: type the folder name; it goes to the Recycle Bin as one item.
+        $('#deleteFolderBtn').on('click', function () {
+            const $btn = $(this);
+            $.getJSON('@Url.Action("FolderInfo", "Media")', { folder, v: Date.now() })
+                .done(function (info) {
+                    if (!info || !info.success) return alert((info && info.message) || "Couldn't check the folder.");
+
+                    let confirmName = '';
+                    const subs = info.subfolderCount ? ` in ${info.subfolderCount} subfolder${info.subfolderCount === 1 ? '' : 's'}` : '';
+                    if (info.isEmpty) {
+                        const extra = info.subfolderCount ? `\n\n(It only has ${info.subfolderCount} empty subfolder${info.subfolderCount === 1 ? '' : 's'} inside.)` : '';
+                        if (!confirm(`Delete the empty folder "${info.name}"?${extra}`)) return;
+                    } else {
+                        const typed = prompt(
+                            `Move the folder "${info.name}" to the Recycle Bin?\n\n`
+                            + `It has ${info.fileCount} file${info.fileCount === 1 ? '' : 's'} (${info.size})${subs}. `
+                            + `You can restore it from the Recycle Bin.\n\nType the folder name to confirm:`);
+                        if (typed === null) return;
+                        if (typed.trim().toLowerCase() !== info.name.toLowerCase())
+                            return alert("That doesn't match the folder name, so nothing was deleted.");
+                        confirmName = typed.trim();
+                    }
+
+                    $btn.prop('disabled', true).text('Deleting...');
+                    T.post('@Url.Action("DeleteFolder", "Media")', { folder, confirmName }).then(res => {
+                        alert(res.message);
+                        // Go up a level (or home for a top-level folder)
+                        window.location.href = res.parent ? T.galleryUrl(res.parent) : '@Url.Action("Index", "Home")';
+                    }, () => $btn.prop('disabled', false).html('&#128465; Delete folder'));
+                })
+                .fail(xhr => { if (xhr.status !== 401) alert("Couldn't check the folder (" + xhr.status + ")."); });
+        });
+
+        $(document).on("click", ".deleteBtn", function () {
+            const $item = itemOf($(this));
+            T.remove(itemFolder($item), itemFile($item)).then(() => removeItem($item));
+        });
+    </script>
+}

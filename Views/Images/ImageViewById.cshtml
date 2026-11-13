@@ -1,0 +1,24 @@
+﻿@model MediaManager.Models.ImageModel
+
+@{
+    ViewBag.Title = "ImageViewById";
+}
+
+<div>
+    <hr />
+    @Html.ActionLink("Back to List", "ImageManager")
+    <hr />
+</div>
+
+<div class="form-group">
+    <label for="@Model.Title"></label>
+    <div class="col-md-10">
+
+        <img src="@MediaManager.Models.SiteSettings.ImageUrl(Model.Title)" />
+
+    </div>
+</div>
+
+@section Scripts {
+    @Scripts.Render("~/bundles/jqueryval")
+}

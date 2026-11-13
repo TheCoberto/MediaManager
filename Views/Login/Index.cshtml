@@ -1,0 +1,129 @@
+﻿@{
+    ViewBag.Title = "Login";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>Login</title>
+    <style>
+        body {
+            font-family: Arial;
+            background-color: #1e1e1e;
+            color: #ddd;
+            display: flex;
+            height: 100vh;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-box {
+            background-color: #2b2b2b;
+            padding: 30px;
+            border-radius: 12px;
+            width: 320px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+
+        .pw-wrap {
+            position: relative;
+            margin-top: 12px;
+        }
+
+        .pw-input {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 10px 64px 10px 10px; /* room on the right for the Show button */
+            border-radius: 6px;
+            border: none;
+            font-size: 16px;
+        }
+
+        .pw-toggle {
+            position: absolute;
+            top: 50%;
+            right: 6px;
+            transform: translateY(-50%);
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            background: #e2e2e2;
+            color: #333;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+            .pw-toggle:hover {
+                background: #cfcfcf;
+            }
+
+        input[type=submit] {
+            margin-top: 16px;
+            padding: 10px;
+            width: 100%;
+            background-color: #0078d7;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+            input[type=submit]:hover {
+                background-color: #005a9e;
+            }
+
+        .error {
+            color: #ff6666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>Login</h2>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="error">@ViewBag.Error</div>
+        }
+
+        @if (!string.IsNullOrEmpty(Request.QueryString["returnUrl"]) && ViewBag.Error == null)
+        {
+            <div style="margin-top:10px; opacity:.8;">Your login expired. Log in to carry on where you were.</div>
+        }
+
+        <form method="post">
+            <div class="pw-wrap">
+                <input type="password" id="password" name="password" class="pw-input" placeholder="Enter password"
+                       autocomplete="current-password" autofocus />
+                <button type="button" id="pwToggle" class="pw-toggle" aria-controls="password" aria-pressed="false"
+                        title="Show password">Show</button>
+            </div>
+            <input type="submit" value="Login" />
+        </form>
+    </div>
+    <script>
+        (function () {
+            var input = document.getElementById('password');
+            var toggle = document.getElementById('pwToggle');
+            toggle.addEventListener('click', function () {
+                var show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                toggle.textContent = show ? 'Hide' : 'Show';
+                toggle.title = show ? 'Hide password' : 'Show password';
+                toggle.setAttribute('aria-pressed', show ? 'true' : 'false');
+                // Keep typing where you were
+                var end = input.value.length;
+                input.focus();
+                try { input.setSelectionRange(end, end); } catch (e) { }
+            });
+            // Never submit the password while it's showing as plain text in the field
+            input.form.addEventListener('submit', function () { input.type = 'password'; });
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+@model List<MediaManager.Controllers.FavoritesController.FavoriteView>
+
+@{
+    ViewBag.Title = "Favorites";
+}
+
+<h2>Favorites</h2>
+<h4 id="favCount">@Model.Count favorite@(Model.Count == 1 ? "" : "s")</h4>
+
+@Html.Partial("_MediaTools")
+
+@if (!Model.Any())
+{
+    <p style="opacity:.8;">No favorites yet. Use the &#9734; Favorite button in a gallery or on a file's page to add some.</p>
+}
+else
+{
+    <div style="text-align:center; margin-bottom:15px;">
+        <input type="text" id="favSearch" placeholder="Search favorites..." style="padding:8px; width:250px; border-radius:5px;" />
+        <a href="@Url.Action("Favorites", "BulkDownload")" class="btn btn-default" style="margin-left:8px;"
+           title="Every favorite as one ZIP, in their folders">&#11015; Download all</a>
+        <span id="favShown" style="margin-left:10px; opacity:.8;"></span>
+    </div>
+}
+
+<div id="favList" style="text-align:center;">
+    @foreach (var f in Model)
+    {
+        <div class="media-item fav-item" data-id="@f.FavoriteId" data-folder="@f.Folder" data-file="@f.FileName"
+             data-search="@((f.Folder + "/" + f.FileName).ToLowerInvariant())"
+             style="margin-bottom:25px; border-bottom:1px solid #555; padding-bottom:15px;">
+            <h4 style="word-break:break-all;">@f.FileName</h4>
+            <div style="margin-bottom:8px; opacity:.8;">
+                in @Html.ActionLink(string.IsNullOrEmpty(f.Folder) ? "(top folder)" : f.Folder, "Gallery", "Media", new { folder = f.Folder }, null)
+                &middot; favorited @f.CreatedAt.ToString("yyyy-MM-dd")
+            </div>
+
+            @if (!f.Exists)
+            {
+                <p class="text-danger">This file is no longer there (it was moved, renamed or deleted outside the site).</p>
+                <div class="media-actions"><button class="removeMissingBtn">Remove from Favorites</button></div>
+            }
+            else
+            {
+                @* Filled in by media-common.js (picture, video / audio player, or document preview) *@
+                <div class="media-player" data-src="@f.Url" data-file="@f.FileName" data-compact="true" data-max-height="500px"></div>
+                <div class="media-actions" style="margin-top:10px;">
+                    <button class="unfavBtn favBtn is-favorite" title="Remove from Favorites">&#9733; Favorite</button>
+                    <button class="viewBtn">View</button>
+                    <a href="@f.Url" download="@f.FileName" style="margin-left:6px;">Download</a>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@section scripts {
+    <script src="@Url.Content("~/Scripts/media-common.js")"></script>
+    <script>
+        (function () {
+            const T = window.MediaTools;
+
+            function updateCounts() {
+                const total = $('.fav-item').length;
+                $('#favCount').text(total + ' favorite' + (total === 1 ? '' : 's'));
+                const shown = $('.fav-item:visible').length;
+                $('#favShown').text($('#favSearch').val() ? `Showing ${shown} of ${total}` : '');
+            }
+
+            function removeItem($item) {
+                $item.fadeOut(200, function () { $(this).remove(); updateCounts(); });
+            }
+
+            $('#favSearch').on('input', function () {
+                const q = $(this).val().trim().toLowerCase();
+                $('.fav-item').each(function () {
+                    $(this).toggle(!q || ($(this).attr('data-search') || '').includes(q));
+                });
+                updateCounts();
+            });
+
+            $(document).on('click', '.unfavBtn', function () {
+                const $item = $(this).closest('.fav-item');
+                T.setFavorite($item.attr('data-folder'), $item.attr('data-file'), false).then(() => removeItem($item), () => { });
+            });
+
+            $(document).on('click', '.removeMissingBtn', function () {
+                const $item = $(this).closest('.fav-item');
+                T.post(window.MEDIA_URLS.removeFavorite, { id: $item.attr('data-id') }).then(() => removeItem($item), () => { });
+            });
+
+            $(document).on('click', '.viewBtn', function () {
+                const $item = $(this).closest('.fav-item');
+                window.location.href = T.viewUrl($item.attr('data-folder'), $item.attr('data-file'));
+            });
+
+            T.pauseVideosOutOfView();
+        })();
+    </script>
+}

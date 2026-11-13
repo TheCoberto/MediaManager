@@ -1,0 +1,60 @@
+﻿@model IEnumerable<MediaManager.Models.ImageModel>
+
+@{
+    ViewBag.Title = "Guest Uploads";
+}
+
+<h2>Guest Uploads</h2>
+
+<h4>Total Uploads: @Model.Count()</h4>
+
+<p>
+    <u>@Html.ActionLink("Upload an image", "ImageAdd", "Images")</u> |
+    <u>@Html.ActionLink("View as guests see it", "ImageViewAll", "Images")</u>
+</p>
+
+<table align="left" class="table table-condensed">
+    <tr>
+        <th>
+
+        </th>
+        <th>
+            Name
+        </th>
+        <th>
+
+        </th>
+        <th>
+
+        </th>
+        <th>
+
+        </th>
+    </tr>
+    @foreach (var item in Model.OrderBy(i => i.Description))
+    {
+        <tr>
+            <td>
+                <img width="100" height="100" src="@MediaManager.Models.SiteSettings.ImageUrl(item.Title)">
+            </td>
+            <td>
+                @Html.DisplayFor(modelItem => item.Description)
+            </td>
+            <td>
+                @Html.ActionLink("View", "ImageViewById", new { id = item.ImageId })
+            </td>
+            <td>
+                @Html.ActionLink("Edit", "ImageEdit", new { id = item.ImageId }) 
+            </td>
+            <td>
+                @using (Html.BeginForm("ImageDelete", "Images", new { id = item.ImageId }, FormMethod.Post,
+                    new { style = "display:inline;", onsubmit = "return confirm('Delete this image? It will be moved to the Recycle Bin, where you can restore it.');" }))
+                {
+                    @Html.AntiForgeryToken()
+                    <button type="submit">Delete</button>
+                }
+
+            </td>
+        </tr>
+    }
+</table>

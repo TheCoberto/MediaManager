@@ -1,0 +1,10 @@
+﻿@{
+    ViewBag.Title = "Audio Downloader";
+}
+
+@using (Html.BeginForm("DownloadAudio", "Downloaders", FormMethod.Post, new { enctype = "multipart/form-data" }))
+{
+    <input type="text" name="url" placeholder="Paste URL" required />
+    <input type="text" placeholder="Name" name="name" id="nameInput" required>
+    <button type="submit">Download</button>
+}

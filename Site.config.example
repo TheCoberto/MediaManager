@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy to Site.config (git-ignored) in the site's app folder.
+  LoginPasswordHash is REQUIRED (there is no built-in password); every other key is optional.
+  NOTE: edits to this file only take effect after the site restarts (publish, recycle the
+  app pool, or just re-save Web.config in the same folder).
+  The media root is NOT set here: it's the IIS virtual directory "/media" on each site.
+-->
+<appSettings>
+  <add key="SiteName" value="Media Manager" />
+
+  <!-- Owner password (full control). Don't type a hash by hand: run
+         .\deploy\New-PasswordHash.ps1 -SiteConfig <path to this Site.config> -Restart
+       which asks for the password and writes this line for you.
+       (Old plain SHA-256 hex hashes still work, but are much weaker: replace them.) -->
+  <add key="LoginPasswordHash" value="pbkdf2-sha256$210000$REPLACE_ME$REPLACE_ME" />
+
+  <!-- Optional guest password: can only see and upload images in ImageUploadFolder.
+         .\deploy\New-PasswordHash.ps1 -SiteConfig <path> -Key GuestPasswordHash -Restart -->
+  <!-- <add key="GuestPasswordHash" value="..." /> -->
+  <!-- Folder (under the media root) for guest uploads; the only media guests can open. Default "Guest Uploads". -->
+  <!-- <add key="ImageUploadFolder" value="Guest Uploads" /> -->
+
+  <!-- Largest upload per file, in MB (files are sent in pieces, so there's no other size limit) -->
+  <!-- <add key="MaxUploadMB" value="20480" /> -->      <!-- owner: Add Media; default 20 GB -->
+  <!-- <add key="GuestMaxUploadMB" value="50" /> -->    <!-- guests: Guest Uploads; default 50 MB -->
+
+  <!-- Optional pages that are OFF when omitted -->
+  <!-- <add key="Feature:StorageRandom" value="true" /> -->
+
+  <!-- Pages that are ON when omitted (Downloaders = Audio + Video Downloader) -->
+  <!-- Feature:Images = the Guest Uploads page -->
+  <!-- <add key="Feature:Images" value="false" /> -->
+  <!-- <add key="Feature:Downloaders" value="false" /> -->
+</appSettings>

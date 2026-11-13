@@ -1,0 +1,177 @@
+﻿@model MediaManager.Models.FileViewModel
+@{
+    ViewBag.Title = ViewBag.File;
+    string folder = ViewBag.Folder;
+    string file = ViewBag.File;
+    string path = ViewBag.Url;
+    string prev = ViewBag.Prev;
+    string next = ViewBag.Next;
+    bool isFavorite = ViewBag.IsFavorite == true;
+    bool isCorrupted = ViewBag.IsCorrupted == true;
+
+    string kind = MediaManager.Models.MediaPaths.KindOf(file);
+    bool isVideo = kind == MediaManager.Models.MediaKind.Video;
+    bool isAudio = kind == MediaManager.Models.MediaKind.Audio;
+}
+
+<h2 style="word-break:break-all;">@file</h2>
+
+<p>
+    <u>@Html.ActionLink("← Back to Gallery", "Gallery", "Media", new { folder = folder }, null)</u>
+</p>
+
+@Html.Partial("_MediaTools")
+
+<div class="view-nav" style="display:flex; justify-content:space-between; align-items:center; max-width:800px; margin:0 auto 10px;">
+    @if (prev != null)
+    {
+        <a id="prevLink" href="@Url.Action("ViewMedia", "Media", new { folder, file = prev })" title="Previous (Left arrow)">&#9664; Previous</a>
+    }
+    else
+    {
+        <span style="opacity:.4;">&#9664; Previous</span>
+    }
+    <span style="opacity:.8;">@ViewBag.Position of @Model.FilesInDirectory</span>
+    @if (next != null)
+    {
+        <a id="nextLink" href="@Url.Action("ViewMedia", "Media", new { folder, file = next })" title="Next (Right arrow)">Next &#9654;</a>
+    }
+    else
+    {
+        <span style="opacity:.4;">Next &#9654;</span>
+    }
+</div>
+
+@* Filled in by media-common.js: picture, video / audio player, PDF viewer, text, or a document card *@
+<div class="media-player" style="text-align:center;" data-src="@path" data-file="@file" data-id="mediaElement"
+     data-autoplay="@((isVideo || isAudio) ? "true" : "false")" data-max-height="80vh"></div>
+
+<div class="media-actions" style="text-align:center; margin-top:12px;">
+    <button id="favBtn" class="favBtn@(isFavorite ? " is-favorite" : "")" data-favorite="@(isFavorite ? "true" : "false")">
+        @Html.Raw(isFavorite ? "&#9733; Favorite" : "&#9734; Favorite")
+    </button>
+    <button id="moveBtn">Move</button>
+    <button id="renameBtn">Rename</button>
+    @if (isCorrupted)
+    {
+        if (isVideo)
+        {
+            <button id="fixBtn">Fix File</button>
+        }
+        <button id="unmarkBtn" title="Clear the Corrupted flag">Unmark Corrupted</button>
+    }
+    else
+    {
+        <button id="corruptedBtn">Mark Corrupted</button>
+    }
+    <button id="deleteBtn">Delete</button>
+    <a href="@path" download="@file" style="margin-left:6px;">Download</a>
+</div>
+
+<div class="file-info" style="max-width:600px; margin:25px auto 0; padding:15px; border:1px solid #ccc; border-radius:6px;">
+    <h4 style="margin-top:0;">File info</h4>
+    <table class="table table-condensed" style="margin-bottom:0;">
+        <tr><th style="width:150px;">Name</th><td style="word-break:break-all;">@Model.FileName</td></tr>
+        <tr><th>Folder</th><td style="word-break:break-all;">@Html.ActionLink(string.IsNullOrEmpty(folder) ? "(top folder)" : folder, "Gallery", "Media", new { folder }, null)</td></tr>
+        <tr><th>Type</th><td>@Model.FileType (@Model.FileExtension.ToLowerInvariant())</td></tr>
+        <tr><th>Size</th><td>@Model.FileSizeFormatted <span style="opacity:.7;">(@Model.FileSize.ToString("N0") bytes)</span></td></tr>
+        <tr id="dimensionsRow" style="display:none;"><th>@(isVideo ? "Resolution" : "Dimensions")</th><td id="dimensions"></td></tr>
+        @if (isVideo || isAudio)
+        {
+            <tr id="durationRow" style="display:none;"><th>Length</th><td id="duration"></td></tr>
+        }
+        <tr><th>Created</th><td>@Model.CreatedDate.ToString("yyyy-MM-dd HH:mm")</td></tr>
+        <tr><th>Modified</th><td>@Model.LastModified.ToString("yyyy-MM-dd HH:mm")</td></tr>
+        <tr><th>Files in folder</th><td>@Model.FilesInDirectory</td></tr>
+        <tr><th>Path</th><td style="word-break:break-all; opacity:.8;">@Model.FullPath</td></tr>
+    </table>
+    <p style="margin:10px 0 0; font-size:12px; opacity:.7;">
+        Keys: &larr; / &rarr; previous / next@((isVideo || isAudio) ? ", J / K / L back 10s / play-pause / forward 10s" : "")
+    </p>
+</div>
+
+@section scripts {
+    <script src="@Url.Content("~/Scripts/media-common.js")"></script>
+    <script>
+        (function () {
+            const T = window.MediaTools;
+            const folder = @Html.Raw(Json.Encode(folder));
+            const file = @Html.Raw(Json.Encode(file));
+            const prev = @Html.Raw(Json.Encode(prev));
+            const next = @Html.Raw(Json.Encode(next));
+
+            // After Move / Delete, carry on with the next file (or previous, or back to the gallery)
+            function goOn() {
+                const target = next || prev;
+                window.location.replace(target ? T.viewUrl(folder, target) : T.galleryUrl(folder));
+            }
+
+            $('#favBtn').on('click', function () {
+                const $btn = $(this);
+                const makeFavorite = $btn.attr('data-favorite') !== 'true';
+                T.setFavorite(folder, file, makeFavorite).then(fav => {
+                    $btn.attr('data-favorite', fav ? 'true' : 'false')
+                        .toggleClass('is-favorite', fav)
+                        .html(fav ? '&#9733; Favorite' : '&#9734; Favorite');
+                }, () => { });
+            });
+
+            $('#moveBtn').on('click', () => T.move(folder, file).then(goOn));
+            $('#deleteBtn').on('click', () => T.remove(folder, file).then(goOn));
+            $('#renameBtn').on('click', () => T.rename(folder, file).then(newName =>
+                window.location.replace(T.viewUrl(folder, newName))));
+
+            $('#corruptedBtn').on('click', function () {
+                const $btn = $(this);
+                T.markCorrupted(file).then(() => location.reload());
+            });
+
+            $('#unmarkBtn').on('click', () => T.unmark(file).then(() => location.reload(), () => { }));
+
+            $('#fixBtn').on('click', function () {
+                const $btn = $(this);
+                T.fix(folder, file, () => $btn.prop('disabled', true).text('Fixing...')).then(
+                    fixed => { if (fixed) location.reload(); },
+                    () => $btn.prop('disabled', false).text('Fix File'));
+            });
+
+            // Left / right arrow keys: previous / next file
+            document.addEventListener('keydown', function (e) {
+                if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+                if ($('#renameModal').is(':visible') || $('#moveModal').is(':visible')) return;
+                if (e.key === 'ArrowLeft' && prev) window.location.href = T.viewUrl(folder, prev);
+                if (e.key === 'ArrowRight' && next) window.location.href = T.viewUrl(folder, next);
+            });
+
+            // Dimensions / video length come from the browser once the file has loaded
+            const el = document.getElementById('mediaElement');
+            if (!el) return;
+
+            function showDimensions(w, h) {
+                if (!w || !h) return;
+                document.getElementById('dimensions').textContent = w + ' × ' + h + ' px';
+                document.getElementById('dimensionsRow').style.display = '';
+            }
+
+            function formatDuration(sec) {
+                sec = Math.round(sec);
+                const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+                return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+            }
+
+            if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') {
+                const onMeta = () => {
+                    if (el.tagName === 'VIDEO') showDimensions(el.videoWidth, el.videoHeight);
+                    if (isFinite(el.duration)) {
+                        document.getElementById('duration').textContent = formatDuration(el.duration);
+                        document.getElementById('durationRow').style.display = '';
+                    }
+                };
+                if (el.readyState >= 1) onMeta(); else el.addEventListener('loadedmetadata', onMeta);
+            } else if (el.tagName === 'IMG') {
+                if (el.complete) showDimensions(el.naturalWidth, el.naturalHeight);
+                else el.addEventListener('load', () => showDimensions(el.naturalWidth, el.naturalHeight));
+            }
+        })();
+    </script>
+}

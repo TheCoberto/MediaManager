@@ -1,0 +1,130 @@
+﻿@{
+    bool isGuest = MediaManager.Models.Roles.IsGuest(Session);
+}
+<!DOCTYPE html>
+<html class="theme-dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // Apply the saved theme before the page draws (no flash). Dark is the default.
+        (function () {
+            var theme = 'dark';
+            try { theme = localStorage.getItem('theme') === 'light' ? 'light' : 'dark'; } catch (e) { }
+            // Only touch our own class: Modernizr adds many other classes to <html>.
+            document.documentElement.classList.remove('theme-dark', 'theme-light');
+            document.documentElement.classList.add('theme-' + theme);
+        })();
+    </script>
+    <title>@ViewBag.Title - @MediaManager.Models.SiteSettings.SiteName</title>
+    @Styles.Render("~/Content/css")
+    @Scripts.Render("~/bundles/modernizr")
+</head>
+<body>
+    @* static-top (not fixed): if the menu ever wraps to two rows it pushes the page down instead of covering it *@
+    <div class="navbar navbar-inverse navbar-static-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                @if (isGuest)
+                {
+                    @Html.ActionLink(MediaManager.Models.SiteSettings.SiteName, "ImageViewAll", "Images", new { area = "" }, new { @class = "navbar-brand" })
+                }
+                else
+                {
+                    @Html.ActionLink(MediaManager.Models.SiteSettings.SiteName, "Index", "Home", new { area = "" }, new { @class = "navbar-brand" })
+                }
+            </div>
+            <div class="navbar-collapse collapse">
+                @if (isGuest)
+                {
+                    <ul class="nav navbar-nav">
+                        <li>@Html.ActionLink("Uploads", "ImageViewAll", "Images")</li>
+                        <li>@Html.ActionLink("Upload an image", "ImageAdd", "Images")</li>
+                    </ul>
+                }
+                else
+                {
+                <ul class="nav navbar-nav">
+                    <li>@Html.ActionLink("Add Media", "AddMedia", "Media")</li>
+                    <li>@Html.ActionLink("Favorites", "Index", "Favorites")</li>
+                    @if (MediaManager.Models.SiteSettings.StorageRandomEnabled)
+                    {
+                        <li>@Html.ActionLink("Storage Random", "StorageRandom", "Media")</li>
+                    }
+                    @if (MediaManager.Models.SiteSettings.ImagesEnabled)
+                    {
+                        <li>@Html.ActionLink("Guest Uploads", "ImageManager", "Images")</li>
+                    }
+                    @if (MediaManager.Models.SiteSettings.DownloadersEnabled)
+                    {
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                                Downloaders <span class="caret"></span>
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li>@Html.ActionLink("Audio Downloader", "AudioDownloader", "Downloaders")</li>
+                                <li>@Html.ActionLink("Video Downloader", "VideoDownloader", "Downloaders")</li>
+                            </ul>
+                        </li>
+                    }
+                    <li>@Html.ActionLink("Flagged", "Flagged", "Media")</li>
+                    <li>@Html.ActionLink("Recycle Bin", "Index", "RecycleBin")</li>
+                </ul>
+                }
+                <ul class="nav navbar-nav navbar-right">
+                    <li><a id="themeToggle" role="button" title="Switch between dark and light mode"></a></li>
+                    @if (Session["Auth"] != null)
+                    {
+                        if (isGuest)
+                        {
+                            <li><p class="navbar-text">Guest</p></li>
+                        }
+                        <li>@Html.ActionLink("Log out", "Logout", "Login")</li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container body-content">
+        @RenderBody()
+        <hr />
+        <footer>
+            <p>&copy; @DateTime.Now.Year - @MediaManager.Models.SiteSettings.SiteName</p>
+        </footer>
+    </div>
+
+    @Scripts.Render("~/bundles/jquery")
+    @Scripts.Render("~/bundles/bootstrap")
+    <script>
+        // Dark / light toggle (remembered per browser)
+        (function () {
+            var root = document.documentElement;
+            var toggle = document.getElementById('themeToggle');
+
+            function isLight() { return root.classList.contains('theme-light'); }
+
+            function render() {
+                // The link shows the mode you'll switch TO
+                toggle.textContent = isLight() ? '🌙 Dark' : '☀️ Light';
+            }
+
+            toggle.addEventListener('click', function (e) {
+                e.preventDefault();
+                var next = isLight() ? 'dark' : 'light';
+                root.classList.remove('theme-dark', 'theme-light');   // keep Modernizr's classes
+                root.classList.add('theme-' + next);
+                try { localStorage.setItem('theme', next); } catch (err) { }
+                render();
+            });
+
+            render();
+        })();
+    </script>
+    @RenderSection("scripts", required: false)
+</body>
+</html>

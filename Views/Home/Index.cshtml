@@ -1,0 +1,156 @@
+﻿@{
+    ViewBag.Title = "Storage - All Galleries";
+    var folders = ViewBag.Folders as List<string> ?? new List<string>();
+    var topLevelFolders = ViewBag.TopLevelFolders as List<string> ?? new List<string>();
+    var hidden = ViewBag.HiddenFolders as HashSet<string> ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+}
+
+@Html.AntiForgeryToken()
+
+<div style="text-align:center; margin-bottom:15px;">
+    <input type="text" id="searchBox" placeholder="Search folders..."
+           style="padding:8px; width:250px; border-radius:5px;" />
+    <button id="searchBtn" style="padding:8px 15px;">Search</button>
+    <button id="clearSearchBtn" style="padding:8px 15px;">Clear</button>
+
+    <div class="dropdown" style="display:inline-block; vertical-align:top;">
+        <button id="hideFoldersBtn" class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown"
+                aria-haspopup="true" aria-expanded="false" style="padding:8px 15px;">
+            Hide folders <span id="hiddenCount" class="badge"></span> <span class="caret"></span>
+        </button>
+        <ul id="hideFoldersMenu" class="dropdown-menu" aria-labelledby="hideFoldersBtn"
+            style="max-height:60vh; overflow-y:auto; padding:6px 12px; text-align:left;">
+            @if (topLevelFolders.Count == 0)
+            {
+                <li style="opacity:.7;">No folders</li>
+            }
+            @foreach (var top in topLevelFolders)
+            {
+                <li>
+                    <label style="display:block; font-weight:normal; white-space:nowrap; cursor:pointer; margin:3px 0;">
+                        <input type="checkbox" class="hide-folder" value="@top" @(hidden.Contains(top) ? "checked" : "") />
+                        @top
+                    </label>
+                </li>
+            }
+        </ul>
+    </div>
+
+    <div id="resultsCount" style="margin-top:10px; opacity:.8;"></div>
+</div>
+
+<h2>Available Folders</h2>
+
+<ul id="folderList">
+    @foreach (var folder in folders)
+    {
+        var indentLevel = folder.Count(c => c == '/');
+        var padding = indentLevel * 20;
+        var top = folder.Split('/')[0];
+
+        <li class="folder-item"
+            data-path="@folder"
+            data-folder="@folder"
+            data-top="@top"
+            style="padding-left:@(padding)px; cursor:pointer; @(hidden.Contains(top) ? "display:none;" : "")">
+            @Html.ActionLink(folder, "Gallery", "Media", new { folder = folder }, null)
+        </li>
+    }
+</ul>
+
+@section scripts {
+    <script>
+$(document).ready(function () {
+
+    // Top-level folders currently hidden (lower-case for case-insensitive matching)
+    const hidden = new Set(
+        $('.hide-folder:checked').map(function () { return this.value.toLowerCase(); }).get()
+    );
+
+    function updateHiddenCount() {
+        $('#hiddenCount').text(hidden.size ? hidden.size : '');
+    }
+
+    // Keep the dropdown open while ticking boxes
+    $('#hideFoldersMenu').on('click', function (e) { e.stopPropagation(); });
+
+    $('.hide-folder').on('change', function () {
+        const $box = $(this);
+        const folder = $box.val();
+        const isHidden = $box.is(':checked');
+
+        isHidden ? hidden.add(folder.toLowerCase()) : hidden.delete(folder.toLowerCase());
+        updateHiddenCount();
+        applyFilter();
+
+        $.post('@Url.Action("SetFolderHidden", "Home")', {
+            folder: folder,
+            hidden: isHidden,
+            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+        }).done(function (res) {
+            if (!res || !res.success) revert((res && res.message) || 'Could not save.');
+        }).fail(function (xhr) {
+            revert(xhr.status === 401
+                ? 'Your login has expired, so that wasn\'t saved. Refresh the page to log in again.'
+                : 'Could not save (' + xhr.status + ').');
+        });
+
+        function revert(message) {
+            $box.prop('checked', !isHidden);
+            !isHidden ? hidden.add(folder.toLowerCase()) : hidden.delete(folder.toLowerCase());
+            updateHiddenCount();
+            applyFilter();
+            alert(message);
+        }
+    });
+
+    // Allow clicking anywhere on the <li>
+    $('#folderList').on('click', '.folder-item', function (e) {
+        if ($(e.target).is('a')) return;
+
+        const folder = $(this).attr('data-path');
+        window.location.href =
+            '@Url.Action("Gallery", "Media")' + '?folder=' + encodeURIComponent(folder);
+    });
+
+    function applyFilter() {
+        const q = ($("#searchBox").val() || "").trim().toLowerCase();
+
+        let shown = 0, total = 0;
+        $(".folder-item").each(function () {
+            const folder = ($(this).attr("data-folder") || "").toLowerCase();
+            const isHidden = hidden.has(($(this).attr("data-top") || "").toLowerCase());
+            const match = !isHidden && (q === "" || folder.includes(q));
+
+            $(this).toggle(match);
+            if (!isHidden) total++;
+            if (match) shown++;
+        });
+
+        $("#resultsCount").text(
+            q ? `Showing ${shown} of ${total}` : `Showing ${total}`
+        );
+    }
+
+    $("#searchBtn").click(applyFilter);
+
+    $("#clearSearchBtn").click(function () {
+        $("#searchBox").val("");
+        applyFilter();
+        $("#searchBox").focus();
+    });
+
+    $("#searchBox").on("input", applyFilter);
+
+    $("#searchBox").on("keydown", function (e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            applyFilter();
+        }
+    });
+
+    updateHiddenCount();
+    applyFilter();
+});
+    </script>
+}

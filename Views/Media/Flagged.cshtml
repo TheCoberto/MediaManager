@@ -1,0 +1,197 @@
+@using MediaManager.Models
+@model List<FlaggedFile>
+@{
+    ViewBag.Title = "Flagged Files";
+    int corruptedCount = Model.Count(f => f.Corrupted);
+    int deletionCount = Model.Count(f => f.ToBeDeleted);
+}
+
+<h2>Flagged Files</h2>
+<p style="opacity:.8;">
+    Files marked <strong>Corrupted</strong> (Gallery, View, Storage Random) or <strong>Marked for Deletion</strong> (Storage Random).
+    Flags are saved by file name, so a name can show up in more than one folder, or in none if it was moved or deleted outside the site.
+</p>
+
+@Html.Partial("_MediaTools")
+
+@if (!Model.Any())
+{
+    <p>Nothing is flagged right now.</p>
+}
+else
+{
+    <div class="flag-filters" style="margin:10px 0 15px;">
+        <button type="button" class="flagFilter active" data-filter="all">All (@Model.Count)</button>
+        <button type="button" class="flagFilter" data-filter="corrupted">Corrupted (@corruptedCount)</button>
+        <button type="button" class="flagFilter" data-filter="deletion">Marked for Deletion (@deletionCount)</button>
+    </div>
+
+    <table class="table table-condensed flagged-table">
+        <thead>
+            <tr>
+                <th style="width:170px;"></th>
+                <th>File</th>
+                <th>Flag</th>
+                <th>Flagged</th>
+                <th>Folder</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var f in Model)
+            {
+                // One row per place the file exists (or a single "not found" row)
+                var folders = f.Folders.Count > 0 ? f.Folders : new List<string> { null };
+                foreach (var folder in folders)
+                {
+                    bool found = folder != null;
+                    bool inFolder = found && folder.Length > 0; // the file tools need a folder (not the very top)
+                    string url = found ? MediaPaths.UrlFor((folder.Length > 0 ? folder + "/" : "") + f.FileName) : null;
+
+                    <tr class="flag-row" data-file="@f.FileName" data-folder="@folder"
+                        data-corrupted="@(f.Corrupted ? "true" : "false")" data-deletion="@(f.ToBeDeleted ? "true" : "false")">
+                        <td>
+                            @if (found)
+                            {
+                                switch (MediaPaths.KindOf(f.FileName))
+                                {
+                                    case MediaKind.Video:
+                                        <video src="@url" preload="metadata" muted controls style="max-width:160px; max-height:120px;"></video>
+                                        break;
+                                    case MediaKind.Audio:
+                                        <audio src="@url" preload="none" controls style="width:160px;"></audio>
+                                        break;
+                                    case MediaKind.Document:
+                                        <a href="@url" target="_blank" rel="noopener" title="Open" style="font-size:32px; text-decoration:none;">@MediaKind.Icon(f.FileName)</a>
+                                        <div style="font-size:12px; opacity:.75;">@MediaKind.Label(f.FileName)</div>
+                                        break;
+                                    default:
+                                        <img src="@url" loading="lazy" alt="" style="max-width:160px; max-height:120px;" />
+                                        break;
+                                }
+                            }
+                        </td>
+                        <td style="word-break:break-all;">@f.FileName</td>
+                        <td>
+                            @if (f.Corrupted)
+                            {
+                                <span class="label label-warning">Corrupted</span>
+                            }
+                            @if (f.ToBeDeleted)
+                            {
+                                <span class="label label-danger">Marked for Deletion</span>
+                            }
+                        </td>
+                        <td style="white-space:nowrap;">@f.FlaggedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td style="word-break:break-all;">
+                            @if (!found)
+                            {
+                                <span style="opacity:.7;">Not found</span>
+                            }
+                            else if (inFolder)
+                            {
+                                @Html.ActionLink(folder, "Gallery", "Media", new { folder }, null)
+                            }
+                            else
+                            {
+                                <span>(top folder)</span>
+                            }
+                        </td>
+                        <td class="flag-actions">
+                            @if (inFolder)
+                            {
+                                @Html.ActionLink("View", "ViewMedia", "Media", new { folder, file = f.FileName }, null)
+                                if (f.Corrupted && f.IsVideo)
+                                {
+                                    <button type="button" class="fixBtn">Fix File</button>
+                                }
+                            }
+                            <button type="button" class="unmarkBtn" title="Clear the flag (it was flagged by mistake)">Unmark</button>
+                            @if (inFolder)
+                            {
+                                <button type="button" class="deleteBtn" title="Move to the Recycle Bin (restorable)">Delete</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+    <p id="emptyMessage" style="display:none;">Nothing left in this list.</p>
+}
+
+<style>
+    .flagFilter.active { font-weight: bold; text-decoration: underline; }
+    .flag-actions > * { margin: 2px; }
+    .flagged-table td { vertical-align: middle !important; }
+</style>
+
+@section scripts {
+    <script src="@Url.Content("~/Scripts/media-common.js")"></script>
+    <script>
+        (function () {
+            const T = window.MediaTools;
+            let filter = 'all';
+
+            function rowsFor(file) {
+                return $('.flag-row').filter(function () { return $(this).attr('data-file') === file; });
+            }
+
+            function applyFilter() {
+                $('.flag-row').each(function () {
+                    const $r = $(this);
+                    const show = filter === 'all'
+                        || (filter === 'corrupted' && $r.attr('data-corrupted') === 'true')
+                        || (filter === 'deletion' && $r.attr('data-deletion') === 'true');
+                    $r.toggle(show);
+                });
+                $('#emptyMessage').toggle($('.flag-row:visible').length === 0);
+            }
+
+            function removeRows($rows) {
+                $rows.fadeOut(200, function () { $(this).remove(); applyFilter(); });
+            }
+
+            $('.flagFilter').on('click', function () {
+                filter = $(this).attr('data-filter');
+                $('.flagFilter').removeClass('active');
+                $(this).addClass('active');
+                applyFilter();
+            });
+
+            // NOTE: .attr('data-…'), not .data(): .data() turns names like "123" into numbers.
+            function rowInfo(btn) {
+                const $row = $(btn).closest('.flag-row');
+                return { $row, file: $row.attr('data-file'), folder: $row.attr('data-folder') };
+            }
+
+            // The flag belongs to the file name, so clearing it clears every row with that name
+            $(document).on('click', '.unmarkBtn', function () {
+                const r = rowInfo(this);
+                T.unmark(r.file).then(() => removeRows(rowsFor(r.file)), () => { });
+            });
+
+            $(document).on('click', '.fixBtn', function () {
+                const $btn = $(this);
+                const r = rowInfo(this);
+                T.fix(r.folder, r.file, () => $btn.prop('disabled', true).text('Fixing...')).then(
+                    fixed => { if (fixed) removeRows(rowsFor(r.file)); }, // fixing clears the flag
+                    () => $btn.prop('disabled', false).text('Fix File'));
+            });
+
+            // Delete this copy; once no copies are left, clear the flag too so the list stays tidy
+            $(document).on('click', '.deleteBtn', function () {
+                const r = rowInfo(this);
+                T.remove(r.folder, r.file).then(() => {
+                    // rows for files that still exist somewhere ("Not found" rows have no data-folder at all)
+                    const others = rowsFor(r.file).not(r.$row).filter(function () { return $(this).attr('data-folder') !== undefined; });
+                    if (others.length === 0) {
+                        T.unmark(r.file).then(() => removeRows(rowsFor(r.file)), () => removeRows(r.$row));
+                    } else {
+                        removeRows(r.$row);
+                    }
+                });
+            });
+        })();
+    </script>
+}

@@ -1,0 +1,97 @@
+﻿@model List<MediaManager.Models.RecycleBinItem>
+
+@{
+    ViewBag.Title = "Recycle Bin";
+    long totalBytes = Model.Sum(i => i.FileSize);
+}
+
+<h2>Recycle Bin</h2>
+
+<p style="opacity:.8;">
+    Files and folders deleted from this site end up here. Restore puts them back where they were
+    (and guest uploads back on the Guest Uploads page).
+</p>
+
+@if (TempData["Message"] != null)
+{
+    <p class="text-success"><strong>@TempData["Message"]</strong></p>
+}
+@if (TempData["Error"] != null)
+{
+    <p class="text-danger"><strong>@TempData["Error"]</strong></p>
+}
+
+@if (!Model.Any())
+{
+    <p>The Recycle Bin is empty.</p>
+}
+else
+{
+    <p>
+        @Model.Count item@(Model.Count == 1 ? "" : "s"), @MediaManager.Models.FileViewModel.FormatFileSize(totalBytes)
+        @using (Html.BeginForm("Empty", "RecycleBin", FormMethod.Post, new { style = "display:inline; margin-left:15px;", onsubmit = "return confirm('Permanently delete everything in the Recycle Bin? This cannot be undone.');" }))
+        {
+            @Html.AntiForgeryToken()
+            <button type="submit">Empty Recycle Bin</button>
+        }
+    </p>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th></th>
+                <th>File</th>
+                <th>Was in</th>
+                <th>Size</th>
+                <th>Deleted</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td style="width:110px;">
+                        @if (item.IsFolder)
+                        {
+                            <span style="font-size:40px;" title="Folder">📁</span>
+                        }
+                        else if (item.IsImage)
+                        {
+                            <img src="@Url.Action("Preview", "RecycleBin", new { id = item.RecycleId })" alt=""
+                                 style="max-width:100px; max-height:80px;" loading="lazy" />
+                        }
+                    </td>
+                    <td style="word-break:break-all;">
+                        @item.FileName
+                        @if (item.IsFolder)
+                        {
+                            <br /><small style="opacity:.8;">Folder with @(item.FileCount ?? 0) file@(item.FileCount == 1 ? "" : "s")</small>
+                        }
+                        @if (!string.IsNullOrEmpty(item.ImageDescription))
+                        {
+                            <br /><small style="opacity:.8;">&ldquo;@item.ImageDescription&rdquo;</small>
+                        }
+                    </td>
+                    <td>@(string.IsNullOrEmpty(item.OriginalFolder) ? "(top folder)" : item.OriginalFolder)@(item.Source == "Images" ? " (Guest Uploads)" : "")</td>
+                    <td>@item.FileSizeFormatted</td>
+                    <td>@item.DeletedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td style="white-space:nowrap;">
+                        @using (Html.BeginForm("Restore", "RecycleBin", new { id = item.RecycleId }, FormMethod.Post, new { style = "display:inline;" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <button type="submit">Restore</button>
+                        }
+                        @using (Html.BeginForm("DeleteForever", "RecycleBin", new { id = item.RecycleId }, FormMethod.Post, new { style = "display:inline;", onsubmit = item.IsFolder
+                                ? "return confirm('Permanently delete this folder and all " + (item.FileCount ?? 0) + " files in it? This cannot be undone.');"
+                                : "return confirm('Permanently delete this file? This cannot be undone.');" }))
+                        {
+                            @Html.AntiForgeryToken()
+                            <button type="submit">Delete forever</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

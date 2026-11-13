@@ -1,0 +1,87 @@
+@*
+    Shared pieces for pages that show and manage media (Gallery, View, Favorites, Storage Random, Flagged):
+    security token, notification toast, Rename and Move dialogs, and the action URLs.
+    The page must also load ~/Scripts/media-common.js in its scripts section (it needs jQuery).
+*@
+@Html.AntiForgeryToken()
+
+<div id="toast"
+     style="display:none; position:fixed; top:20px; right:20px; padding:10px 20px;
+            background:#333; color:#fff; border-radius:6px; z-index:9999;">
+</div>
+
+<div id="renameModal" class="modal" style="display:none;">
+    <div class="modal-content" style="padding:15px;">
+        <h3>Rename File</h3>
+        <input type="text" id="renameInput" autocomplete="off" style="width:100%; max-width:420px;" />
+        <div style="margin-top:10px;">
+            <button id="renameConfirmBtn">Rename</button>
+            <button type="button" onclick="$('#renameModal').hide();">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="moveModal" class="modal" style="display:none;">
+    <div class="modal-content" style="padding:15px;">
+        <h3>Move File</h3>
+        <p id="moveFileName" style="opacity:.8; word-break:break-all;"></p>
+        <input type="text" id="moveInput" placeholder="Search folders, or type a new one" autocomplete="off"
+               style="width:100%; max-width:420px;" />
+        <div id="moveFolderList" class="move-folder-list"></div>
+        <div id="moveHint" style="font-size:12px; opacity:.8; margin:4px 0 10px;"></div>
+        <button id="moveConfirmBtn">Move</button>
+        <button type="button" onclick="$('#moveModal').hide();">Cancel</button>
+    </div>
+</div>
+
+<style>
+    .move-folder-list {
+        max-width: 420px;
+        max-height: 240px;
+        overflow-y: auto;
+        margin-top: 4px;
+        border: 1px solid rgba(127, 127, 127, .4);
+        border-radius: 4px;
+        text-align: left;
+    }
+
+    .move-folder-option {
+        padding: 6px 8px;
+        cursor: pointer;
+        word-break: break-all;
+    }
+
+        .move-folder-option:hover {
+            background: rgba(127, 127, 127, .25);
+        }
+
+    .favBtn.is-favorite {
+        color: #f5c518;
+    }
+</style>
+
+<script>
+    // File extensions by kind (Models/Constants), so the browser shows each file the right way
+    window.MEDIA_KINDS = @Html.Raw(Json.Encode(new
+    {
+        image = MediaManager.Models.Constants.Constants.ImageExtensions,
+        video = MediaManager.Models.Constants.Constants.VideoExtensions,
+        audio = MediaManager.Models.Constants.Constants.AudioExtensions,
+        document = MediaManager.Models.Constants.Constants.DocumentExtensions
+    }));
+
+    window.MEDIA_URLS = {
+        rename: '@Url.Action("RenameMedia", "Media")',
+        move: '@Url.Action("MoveMedia", "Media")',
+        remove: '@Url.Action("DeleteMedia", "Media")',
+        markCorrupted: '@Url.Action("MarkAsCorrupted", "Media")',
+        unmark: '@Url.Action("UnmarkFile", "Media")',
+        fix: '@Url.Action("FixCorruptedFile", "Media")',
+        clearCache: '@Url.Action("ClearMediaCache", "Media")',
+        folders: '@Url.Action("GetFolders", "Media")',
+        view: '@Url.Action("ViewMedia", "Media")',
+        gallery: '@Url.Action("Gallery", "Media")',
+        setFavorite: '@Url.Action("Set", "Favorites")',
+        removeFavorite: '@Url.Action("Remove", "Favorites")'
+    };
+</script>
