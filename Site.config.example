@@ -27,9 +27,10 @@
 
   <!-- Optional pages that are OFF when omitted -->
   <!-- <add key="Feature:StorageRandom" value="true" /> -->
+  <!-- Downloaders = Audio + Video Downloader; needs yt-dlp.exe (and ffmpeg.exe) in ToolsFolder -->
+  <!-- <add key="Feature:Downloaders" value="true" /> -->
 
-  <!-- Pages that are ON when omitted (Downloaders = Audio + Video Downloader) -->
+  <!-- Pages that are ON when omitted -->
   <!-- Feature:Images = the Guest Uploads page -->
   <!-- <add key="Feature:Images" value="false" /> -->
-  <!-- <add key="Feature:Downloaders" value="false" /> -->
 </appSettings>
