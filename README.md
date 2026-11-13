@@ -33,7 +33,8 @@ set of features (for example a family media site and a separate private one).
 - **Recycle Bin**: deleted files go to `<media folder>\.recycle` and can be restored or deleted for good.
 - **Bulk download**: a whole folder, the selected files, or all favorites as one ZIP.
 - **Guest login** (optional): a second password that can only see and upload images in one folder.
-- **Downloaders** (optional): save audio or video from a link using yt-dlp.
+- **Downloaders** (optional, off by default): save audio or video from a link using yt-dlp. Turn on with
+  `Feature:Downloaders` in Site.config.
 - **Storage Random** (optional, off by default): shows a random picture, video or audio file from the
   whole media folder, or from one folder.
 
@@ -209,7 +210,7 @@ it by re-saving `Web.config` in the same folder.
 | `GuestMaxUploadMB` | `50` | Largest image a guest can upload. |
 | `ToolsFolder` | `C:\Tools\` (from `Web.config`) | Folder containing `ffmpeg.exe` and `yt-dlp.exe`. Set it here per site, or change the default in `Web.config` for all sites. |
 | `Feature:Images` | `true` | The Uploads / Guest Uploads pages (and with them the guest login's pages). |
-| `Feature:Downloaders` | `true` | Audio and Video Downloader. |
+| `Feature:Downloaders` | `false` | Audio and Video Downloader (needs `yt-dlp.exe` in `ToolsFolder`). |
 | `Feature:StorageRandom` | `false` | Storage Random page. |
 
 ## Updating a site

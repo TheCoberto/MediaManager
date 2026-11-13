@@ -39,11 +39,12 @@ namespace MediaManager.Models
         // Off unless turned on:
         public static bool StorageRandomEnabled => IsFeatureEnabled("StorageRandom", false);
 
+        /// <summary>Audio + Video Downloader (yt-dlp). Off by default: turn on per site in Site.config.</summary>
+        public static bool DownloadersEnabled => IsFeatureEnabled("Downloaders", false);
+
         // On unless turned off:
         /// <summary>The Guest Uploads page (ImagesController). Key kept as "Images" so existing Site.config files still work.</summary>
         public static bool ImagesEnabled => IsFeatureEnabled("Images", true);
-
-        public static bool DownloadersEnabled => IsFeatureEnabled("Downloaders", true);
 
         public static bool IsFeatureEnabled(string feature, bool enabledByDefault)
         {
