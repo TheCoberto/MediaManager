@@ -199,10 +199,10 @@
         });
     }
 
-    function markCorrupted(file) {
+    function markCorrupted(folder, file) {
         return new Promise(function (resolve) {
             if (!confirm('Mark "' + file + '" as corrupted?')) return;
-            post(URLS.markCorrupted, { fileName: file }).then(function () {
+            post(URLS.markCorrupted, { folder: folder, fileName: file }).then(function () {
                 showToast("File marked as corrupted");
                 resolve();
             }, function () { });
@@ -210,8 +210,9 @@
     }
 
     // Clears a Corrupted / Marked-for-deletion flag (no confirmation: it's easy to flag again).
-    function unmark(file) {
-        return post(URLS.unmark, { fileName: file }).then(function () {
+    // nameOnly: an old flag saved by file name only, whose file isn't anywhere now (Flagged page).
+    function unmark(folder, file, nameOnly) {
+        return post(URLS.unmark, { folder: folder, fileName: file, nameOnly: !!nameOnly }).then(function () {
             showToast("Flag cleared");
         });
     }
@@ -264,6 +265,8 @@
      * opts.compact    list view (Gallery, Favorites, Flagged): small text preview, PDFs as a card
      * opts.maxHeight  CSS max height (default 80vh)
      * opts.sizeAttrs  extra attributes for images / videos, e.g. 'width="500" height="400"'
+     * opts.thumb      thumbnail URL (lists): shown instead of a big picture, and as a video's poster so
+     *                 nothing of the video downloads until you press play
      */
     function mediaHtml(url, file, opts) {
         opts = opts || {};
@@ -272,10 +275,13 @@
         var maxH = opts.maxHeight || "80vh";
         var auto = opts.autoplay ? " autoplay" : "";
         var size = opts.sizeAttrs ? " " + opts.sizeAttrs : "";
+        var thumb = opts.thumb ? escapeHtml(opts.thumb) : "";
 
         switch (kindOf(file)) {
             case "video":
-                return '<video' + id + size + ' controls loop' + auto + ' preload="metadata" style="max-width:100%; max-height:' + maxH + ';"><source src="' + src + '"></video>';
+                return '<video' + id + size + ' controls loop' + auto
+                    + (thumb ? ' preload="none" poster="' + thumb + '"' : ' preload="metadata"')
+                    + ' style="max-width:100%; max-height:' + maxH + ';"><source src="' + src + '"></video>';
             case "audio":
                 return '<div class="audio-card"><div class="kind-icon">🎵</div>'
                     + '<audio' + id + ' controls preload="metadata"' + auto + ' src="' + src + '"></audio></div>';
@@ -293,7 +299,7 @@
                     + '<div>' + escapeHtml(extLabel(file)) + ' document'
                     + (isPdf(file) ? "" : '<br><small>Browsers can\'t show this type. Download it to open it.</small>') + '</div></div>';
             default:
-                return '<img' + id + size + ' src="' + src + '" loading="lazy" alt="" style="max-width:100%; max-height:' + maxH + ';">';
+                return '<img' + id + size + ' src="' + (thumb || src) + '" loading="lazy" alt="" style="max-width:100%; max-height:' + maxH + ';">';
         }
     }
 
@@ -326,11 +332,12 @@
         });
     }
 
-    // Server-rendered pages leave <div class="media-player" data-src data-file [data-id data-autoplay data-compact data-max-height]>
+    // Server-rendered pages leave <div class="media-player" data-src data-file [data-id data-autoplay data-compact data-max-height data-thumb]>
     function renderPlayers(root) {
         $(root || document).find(".media-player[data-src]").each(function () {
             var el = this;
             el.innerHTML = mediaHtml(el.getAttribute("data-src"), el.getAttribute("data-file"), {
+                thumb: el.getAttribute("data-thumb"),
                 id: el.getAttribute("data-id"),
                 autoplay: el.getAttribute("data-autoplay") === "true",
                 compact: el.getAttribute("data-compact") === "true",

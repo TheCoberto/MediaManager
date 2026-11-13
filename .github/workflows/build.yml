@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore MediaManager.sln
+
+      # Web.config reads these two per-site files, which aren't in git. The examples are enough to build
+      # (and to compile the Razor views below, which loads Web.config).
+      - name: Use the example config files
+        shell: pwsh
+        run: |
+          Copy-Item Site.config.example Site.config
+          Copy-Item ConnectionStrings.config.example ConnectionStrings.config
+
+      # MvcBuildViews also compiles every .cshtml, so a broken view fails the build instead of the live site
+      - name: Build (Release, with views)
+        run: msbuild MediaManager.csproj /p:Configuration=Release /p:MvcBuildViews=true /v:minimal /nologo
+
+      - name: Check PowerShell scripts parse
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in Get-ChildItem deploy -Filter *.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            foreach ($e in $errors) { Write-Host "::error file=deploy/$($f.Name),line=$($e.Extent.StartLineNumber)::$($e.Message)"; $failed = $true }
+          }
+          if ($failed) { exit 1 }

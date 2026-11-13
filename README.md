@@ -25,11 +25,17 @@ set of features (for example a family media site and a separate private one).
 
 - **Gallery**: one page per top-level folder, with an infinite-scroll grid of images, videos, audio and
   documents. It shows the folder path with links to subfolders, and has an "Include subfolders" switch.
+- **Thumbnails**: the Gallery, Favorites and Flagged pages show photos as small previews (turned the right
+  way up) and videos with a still frame, so pages load fast on phones; the full file loads when you open
+  it or press play. They're made the first time they're needed and kept in `<media folder>\.thumbs`.
+  Videos, WebP and HEIC need ffmpeg; GIFs, small images and anything that can't be read are shown as they are.
 - **Viewer**: full-size images, streaming video and audio with seeking, and documents in the browser.
 - **Add Media**: upload files of any size (they're sent in pieces) into any folder.
 - **Favorites**: star files and see them all on one page.
 - **Flagged**: mark files for deletion or as corrupted, review them in one place, and repair corrupted
-  videos with ffmpeg.
+  videos with ffmpeg. Flags belong to one file, so two files with the same name in different folders
+  (like `IMG_0001.jpg`) are flagged separately. Flags follow a file when it's renamed or moved, and are
+  cleared when it's deleted.
 - **Recycle Bin**: deleted files go to `<media folder>\.recycle` and can be restored or deleted for good.
 - **Bulk download**: a whole folder, the selected files, or all favorites as one ZIP.
 - **Guest login** (optional): a second password that can only see and upload images in one folder.
@@ -208,7 +214,7 @@ it by re-saving `Web.config` in the same folder.
 | `ImageUploadFolder` | `Guest Uploads` | Folder (under the media folder) for guest uploads; the only files guests can open. |
 | `MaxUploadMB` | `20480` (20 GB) | Largest file the owner can upload. |
 | `GuestMaxUploadMB` | `50` | Largest image a guest can upload. |
-| `ToolsFolder` | `C:\Tools\` (from `Web.config`) | Folder containing `ffmpeg.exe` and `yt-dlp.exe`. Set it here per site, or change the default in `Web.config` for all sites. |
+| `ToolsFolder` | `C:\Tools\` (from `Web.config`) | Folder containing `ffmpeg.exe` (video thumbnails, Fix File) and `yt-dlp.exe`. Set it here per site, or change the default in `Web.config` for all sites. |
 | `Feature:Images` | `true` | The Uploads / Guest Uploads pages (and with them the guest login's pages). |
 | `Feature:Downloaders` | `false` | Audio and Video Downloader (needs `yt-dlp.exe` in `ToolsFolder`). |
 | `Feature:StorageRandom` | `false` | Storage Random page. |
@@ -282,6 +288,11 @@ while debugging. It works under real IIS.
 - **Gallery is empty.** Check the site's `/media` virtual directory points at the right folder, and that
   the app pool can read it (`Setup-IIS.ps1 ... -GrantMediaAccess`).
 - **Uploads, moves or the Recycle Bin fail.** The app pool needs *modify* rights on the media folder.
+- **No thumbnails (galleries show full-size pictures, videos have no still frame).** The app pool needs
+  *modify* rights on the media folder to save them in `.thumbs` (`-GrantMediaAccess`), and `ffmpeg.exe` in
+  `ToolsFolder` for videos. Deleting the `.thumbs` folder is safe: thumbnails are made again when needed.
+- **Database errors after updating ("Invalid column name 'Folder'").** Re-run `Setup-Database.ps1` for the
+  site's database (see [Updating a site](#updating-a-site)).
 - **HTTP Error 500.19.** IIS is missing ASP.NET 4.8 (see [Requirements](#requirements)), or the site's
   `ConnectionStrings.config` / `Site.config` is missing or isn't valid XML.
 - **Database errors.** Check `ConnectionStrings.config`. With Integrated Security, check the app pool has
