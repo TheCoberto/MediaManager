@@ -87,6 +87,7 @@ else
         }
         <form method="post" action="@Url.Action("MarkForDeletion", "Media")" class="d-inline" style="display:inline;">
             @Html.AntiForgeryToken()
+            <input type="hidden" name="folder" value="@folder" />
             <input type="hidden" name="fileName" value="@Model.FileName" />
             <input type="hidden" name="within" value="@within" />
             <button type="submit" title="Flag it for later and go to the next file (the file is not deleted)">Mark for Deletion</button>
@@ -184,8 +185,8 @@ else
                 window.location.replace(u.toString());
             }));
 
-            $('#corruptedBtn').on('click', () => T.markCorrupted(file).then(() => location.reload()));
-            $('#unmarkBtn').on('click', () => T.unmark(file).then(() => location.reload(), () => { }));
+            $('#corruptedBtn').on('click', () => T.markCorrupted(folder, file).then(() => location.reload()));
+            $('#unmarkBtn').on('click', () => T.unmark(folder, file).then(() => location.reload(), () => { }));
 
             $('#fixBtn').on('click', function () {
                 const $btn = $(this);

@@ -71,9 +71,23 @@ IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Images') A
     ALTER TABLE dbo.Images ALTER COLUMN FileExt VARCHAR(10) NOT NULL;
 GO
 
--- Flags are looked up by file name, newest first (gallery pages, Flagged page)
+-- Flags belong to one file (folder + name). Older rows were saved by name only, so a flag showed on every
+-- file with that name in any folder; those keep Folder = NULL and still apply to the name until a file gets
+-- its own newer row. Folder is relative to the media root ('' = the top folder).
+IF COL_LENGTH('dbo.LogTable', 'Folder') IS NULL
+    ALTER TABLE dbo.LogTable ADD Folder NVARCHAR(1000) NULL;
+GO
+
+-- Flags are looked up by file name, newest first (gallery pages, Flagged page). Rebuilt once to include Folder.
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.LogTable') AND name = 'IX_LogTable_FileName_CreatedAt')
+   AND NOT EXISTS (SELECT 1 FROM sys.index_columns ic
+                   JOIN sys.indexes i ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                   WHERE i.object_id = OBJECT_ID('dbo.LogTable') AND i.name = 'IX_LogTable_FileName_CreatedAt'
+                     AND COL_NAME(ic.object_id, ic.column_id) = 'Folder')
+    DROP INDEX IX_LogTable_FileName_CreatedAt ON dbo.LogTable;
+GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.LogTable') AND name = 'IX_LogTable_FileName_CreatedAt')
-    CREATE INDEX IX_LogTable_FileName_CreatedAt ON dbo.LogTable (FileName, CreatedAt DESC) INCLUDE (Corrupted, ToBeDeleted);
+    CREATE INDEX IX_LogTable_FileName_CreatedAt ON dbo.LogTable (FileName, CreatedAt DESC) INCLUDE (Folder, Corrupted, ToBeDeleted);
 GO
 
 -- Top-level folders hidden from the home page folder list ("Hide folders" dropdown)

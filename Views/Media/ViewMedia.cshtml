@@ -121,12 +121,9 @@
             $('#renameBtn').on('click', () => T.rename(folder, file).then(newName =>
                 window.location.replace(T.viewUrl(folder, newName))));
 
-            $('#corruptedBtn').on('click', function () {
-                const $btn = $(this);
-                T.markCorrupted(file).then(() => location.reload());
-            });
+            $('#corruptedBtn').on('click', () => T.markCorrupted(folder, file).then(() => location.reload()));
 
-            $('#unmarkBtn').on('click', () => T.unmark(file).then(() => location.reload(), () => { }));
+            $('#unmarkBtn').on('click', () => T.unmark(folder, file).then(() => location.reload(), () => { }));
 
             $('#fixBtn').on('click', function () {
                 const $btn = $(this);

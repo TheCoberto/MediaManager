@@ -1,11 +1,8 @@
-using Dapper;
 using MediaManager.Filters;
 using MediaManager.Models;
 using MediaManager.Models.Constants;
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Data.SqlClient;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -137,50 +134,41 @@ namespace MediaManager.Controllers
                 return new { Path = p, Sub = sub, Name = p.Substring(slash + 1), Folder = sub.Length == 0 ? folder : folder + "/" + sub };
             }).ToList();
 
-            // Look up corrupted / favorite status for just this page's files
-            var corruptedSet = GetCorruptedSet(items.Select(i => i.Name).ToList());
-            var favoritesByFolder = items.Select(i => i.Folder).Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(f => f, Favorites.GetFileNamesIn, StringComparer.OrdinalIgnoreCase);
+            // Look up corrupted / favorite status for just this page's files, folder by folder
+            var byFolder = items.GroupBy(i => i.Folder, StringComparer.OrdinalIgnoreCase).ToList();
+            var corruptedByFolder = byFolder.ToDictionary(g => g.Key, g => Flags.CorruptedIn(g.Key, g.Select(i => i.Name).ToList()),
+                StringComparer.OrdinalIgnoreCase);
+            var favoritesByFolder = byFolder.ToDictionary(g => g.Key, g => Favorites.GetFileNamesIn(g.Key), StringComparer.OrdinalIgnoreCase);
 
-            var result = items.Select(i => new
+            var result = items.Select(i =>
             {
-                i.Path,                // the gallery's key and paging cursor
-                FileName = i.Name,
-                Subfolder = i.Sub,     // "" = this folder
-                i.Folder,              // the file's own folder, for its buttons
-                Corrupted = corruptedSet.Contains(i.Name),
-                Favorite = favoritesByFolder[i.Folder].Contains(i.Name),
-                Size = FileSizeOrZero(Path.Combine(folderPath, i.Path.Replace('/', '\\'))) // for the "N selected · size" bar
+                var info = FileInfoOrNull(Path.Combine(folderPath, i.Path.Replace('/', '\\')));
+                return new
+                {
+                    i.Path,                // the gallery's key and paging cursor
+                    FileName = i.Name,
+                    Subfolder = i.Sub,     // "" = this folder
+                    i.Folder,              // the file's own folder, for its buttons
+                    Corrupted = corruptedByFolder[i.Folder].Contains(i.Name),
+                    Favorite = favoritesByFolder[i.Folder].Contains(i.Name),
+                    Size = info?.Length ?? 0,                                // for the "N selected · size" bar
+                    Thumb = info == null ? null : Thumbnails.UrlFor(Url, i.Folder, i.Name, info) // null: show the file itself
+                };
             });
 
             return Json(new { Files = result, TotalCount = totalCount, HasMore = remaining.Count > paged.Count }, JsonRequestBehavior.AllowGet);
         }
 
-        private static long FileSizeOrZero(string path)
+        private static FileInfo FileInfoOrNull(string path)
         {
-            try { return new FileInfo(path).Length; }
-            catch (IOException) { return 0; } // moved / deleted since the list was cached
-        }
-
-        /// <summary>Which of these file names are currently flagged corrupted (latest LogTable entry).</summary>
-        private static HashSet<string> GetCorruptedSet(ICollection<string> fileNames)
-        {
-            if (fileNames.Count == 0)
-                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            using (IDbConnection db = new SqlConnection(Constants._connectionString))
+            try
             {
-                string sql = @"
-                    SELECT FileName
-                    FROM LogTable l
-                    WHERE l.Corrupted = 1
-                    AND l.CreatedAt = (
-                        SELECT MAX(l2.CreatedAt) FROM LogTable l2 WHERE l2.FileName = l.FileName
-                    )
-                    AND l.FileName IN @FileNames";
-
-                var corruptedFiles = db.Query<string>(sql, new { FileNames = fileNames });
-                return new HashSet<string>(corruptedFiles, StringComparer.OrdinalIgnoreCase);
+                var info = new FileInfo(path);
+                return info.Exists ? info : null; // moved / deleted since the list was cached
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                return null;
             }
         }
 
@@ -279,7 +267,8 @@ namespace MediaManager.Controllers
             // Not into the site's own hidden folders (checked on the resolved path: Windows drops trailing dots)
             if (MediaPaths.ToRelative(folderPath).Split('/').Any(p =>
                     string.Equals(p, RecycleBin.FolderName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(p, ChunkedUpload.FolderName, StringComparison.OrdinalIgnoreCase)))
+                    string.Equals(p, ChunkedUpload.FolderName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p, Thumbnails.FolderName, StringComparison.OrdinalIgnoreCase)))
                 return "Folder is invalid.";
 
             string uploadExt = Path.GetExtension(originalName ?? "").ToLowerInvariant();
@@ -356,7 +345,7 @@ namespace MediaManager.Controllers
             ViewBag.Position = index + 1;
 
             ViewBag.IsFavorite = Favorites.IsFavorite(folder, info.Name);
-            ViewBag.IsCorrupted = GetCorruptedSet(new[] { info.Name }).Contains(info.Name);
+            ViewBag.IsCorrupted = Flags.Get(folder, info.Name).Corrupted;
 
             return View(model);
         }
@@ -374,6 +363,8 @@ namespace MediaManager.Controllers
 
             RecycleBin.Recycle(fullPath, RecycleBin.SourceGallery); // restorable from the Recycle Bin page
             Favorites.Set(folder, file, false);
+            Flags.Forget(folder, file);
+            Thumbnails.Forget(folder, file);
             InvalidateFolderCache(folder);
 
             return Json(new { success = true });
@@ -400,6 +391,8 @@ namespace MediaManager.Controllers
 
             System.IO.File.Move(oldPath, newPath);
             Favorites.Rename(folder, oldName, newName);
+            Flags.Move(folder, oldName, folder, newName);
+            Thumbnails.Forget(folder, oldName);
             InvalidateFolderCache(folder);
 
             return Json(new { success = true, newName });
@@ -448,6 +441,8 @@ namespace MediaManager.Controllers
 
             System.IO.File.Move(oldPath, Path.Combine(destinationFolder, newName));
             Favorites.Move(folder, file, newFolder, newName);
+            Flags.Move(folder, file, newFolder, newName);
+            Thumbnails.Forget(folder, file);
 
             InvalidateFolderCache(folder);
             InvalidateFolderCache(newFolder);
@@ -668,7 +663,7 @@ namespace MediaManager.Controllers
             ViewBag.Within = within;
             ViewBag.PoolCount = pool?.Count ?? allFiles.Count;
             ViewBag.IsFavorite = folder.Length > 0 && Favorites.IsFavorite(folder, info.Name);
-            ViewBag.IsCorrupted = GetCorruptedSet(new[] { info.Name }).Contains(info.Name);
+            ViewBag.IsCorrupted = Flags.Get(folder, info.Name).Corrupted;
 
             return View("StorageRandom", model);
         }
@@ -703,21 +698,15 @@ namespace MediaManager.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult MarkForDeletion(string fileName, string within)
+        public ActionResult MarkForDeletion(string folder, string fileName, string within)
         {
             if (!SiteSettings.StorageRandomEnabled) // only used by the Storage Random page
                 return HttpNotFound();
-            if (string.IsNullOrEmpty(fileName))
+            if (MediaPaths.ResolveFile(folder, fileName) == null)
                 return new HttpStatusCodeResult(400, "Invalid file details.");
 
-            using (IDbConnection db = new SqlConnection(Constants._connectionString))
-            {
-                string sql = @"
-                    INSERT INTO LogTable (FileName, ToBeDeleted, Corrupted, CreatedAt)
-                    VALUES (@FileName, 1, 0, GETDATE())";
-
-                db.Execute(sql, new { FileName = fileName });
-            }
+            var current = Flags.Get(folder, fileName);
+            Flags.Set(folder, fileName, current.Corrupted, true);
 
             TempData["Message"] = "\"" + fileName + "\" marked for deletion.";
             within = MediaPaths.NormalizeFolder(within);
@@ -726,51 +715,31 @@ namespace MediaManager.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult MarkAsCorrupted(string fileName)
+        public JsonResult MarkAsCorrupted(string folder, string fileName)
         {
-            if (string.IsNullOrEmpty(fileName))
+            if (MediaPaths.ResolveFile(folder, fileName) == null)
                 return Json(new { success = false, message = "Invalid file details." });
 
-            try
-            {
-                using (IDbConnection db = new SqlConnection(Constants._connectionString))
-                {
-                    string sql = @"
-                        INSERT INTO LogTable (FileName, ToBeDeleted, Corrupted, CreatedAt)
-                        VALUES (@FileName, 0, 1, GETDATE())";
-                    db.Execute(sql, new { FileName = fileName });
-                }
-
-                // The Storage Random page posts a normal form; send it back to the next random file.
-                if (!Request.IsAjaxRequest())
-                {
-                    TempData["Message"] = "File marked as corrupted.";
-                    return RedirectToAction("StorageRandom");
-                }
-
-                return Json(new { success = true, message = "File marked as corrupted." });
-            }
-            catch (Exception ex)
-            {
-                return Json(new { success = false, message = ex.Message });
-            }
+            var current = Flags.Get(folder, fileName);
+            Flags.Set(folder, fileName, true, current.ToBeDeleted);
+            return Json(new { success = true, message = "File marked as corrupted." });
         }
 
-        /// <summary>Clears a file's Corrupted / Marked-for-deletion flag (e.g. it was flagged by mistake).</summary>
+        /// <summary>
+        /// Clears a file's Corrupted / Marked-for-deletion flags (e.g. it was flagged by mistake).
+        /// <paramref name="nameOnly"/>: clear an old flag saved by name only, whose file isn't anywhere now.
+        /// </summary>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public JsonResult UnmarkFile(string fileName)
+        public JsonResult UnmarkFile(string folder, string fileName, bool nameOnly = false)
         {
-            if (string.IsNullOrWhiteSpace(fileName))
+            if (!MediaPaths.IsPlainFileName(fileName) || (!nameOnly && MediaPaths.ResolveFile(folder, fileName) == null))
                 return Json(new { success = false, message = "Invalid file details." });
 
-            // LogTable is a history: the newest row for a name is its current state, so add a "nothing flagged" row.
-            using (IDbConnection db = new SqlConnection(Constants._connectionString))
-            {
-                db.Execute(@"
-                    INSERT INTO LogTable (FileName, ToBeDeleted, Corrupted, CreatedAt)
-                    VALUES (@FileName, 0, 0, GETDATE())", new { FileName = fileName });
-            }
+            if (nameOnly)
+                Flags.ClearNameOnly(fileName);
+            else
+                Flags.Set(folder, fileName, false, false);
 
             return Json(new { success = true, message = "Flag cleared." });
         }
@@ -778,44 +747,7 @@ namespace MediaManager.Controllers
         /// <summary>Every file currently flagged Corrupted or Marked for Deletion, with where it is now.</summary>
         public ActionResult Flagged()
         {
-            List<FlaggedFile> flagged;
-            using (IDbConnection db = new SqlConnection(Constants._connectionString))
-            {
-                // Current state = each name's newest row (LogID breaks ties within the same instant)
-                flagged = db.Query<FlaggedFile>(@"
-                    SELECT l.FileName, l.Corrupted, l.ToBeDeleted, l.CreatedAt AS FlaggedAt
-                    FROM LogTable l
-                    WHERE l.LogID = (SELECT TOP 1 l2.LogID FROM LogTable l2
-                                     WHERE l2.FileName = l.FileName
-                                     ORDER BY l2.CreatedAt DESC, l2.LogID DESC)
-                      AND (l.Corrupted = 1 OR l.ToBeDeleted = 1)
-                    ORDER BY l.CreatedAt DESC").ToList();
-            }
-
-            // Flags are stored by file name only, so look the names up on disk to find their folder(s).
-            if (flagged.Count > 0)
-            {
-                var wanted = new HashSet<string>(flagged.Select(f => f.FileName), StringComparer.OrdinalIgnoreCase);
-                var foldersByName = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-                foreach (var path in GetAllFilesCached())
-                {
-                    string name = Path.GetFileName(path);
-                    if (!wanted.Contains(name))
-                        continue;
-
-                    string relative = MediaPaths.ToRelative(Path.GetDirectoryName(path));
-                    if (!foldersByName.TryGetValue(name, out var list))
-                        foldersByName[name] = list = new List<string>();
-                    list.Add(relative);
-                }
-
-                foreach (var f in flagged)
-                    f.Folders = foldersByName.TryGetValue(f.FileName, out var list)
-                        ? list.OrderBy(x => x, NaturalStringComparer.Instance).ToList()
-                        : new List<string>();
-            }
-
-            return View(flagged);
+            return View(Flags.GetFlagged(GetAllFilesCached()));
         }
 
         [HttpPost]
@@ -831,18 +763,9 @@ namespace MediaManager.Controllers
                 return Json(new { success = false, message = "Fix File only supports video files." });
 
             // Gate: only allow fixing files actually flagged corrupted
-            using (IDbConnection db = new SqlConnection(Constants._connectionString))
-            {
-                string checkSql = @"
-                    SELECT TOP 1 Corrupted
-                    FROM LogTable
-                    WHERE FileName = @FileName
-                    ORDER BY CreatedAt DESC";
-
-                bool? corrupted = db.ExecuteScalar<bool?>(checkSql, new { FileName = fileName });
-                if (corrupted != true)
-                    return Json(new { success = false, message = "File is not marked as corrupted." });
-            }
+            var flags = Flags.Get(folder, fileName);
+            if (!flags.Corrupted)
+                return Json(new { success = false, message = "File is not marked as corrupted." });
 
             if (!System.IO.File.Exists(serverPath))
                 return Json(new { success = false, message = "File not found on disk." });
@@ -898,15 +821,9 @@ namespace MediaManager.Controllers
 
                 System.IO.File.Delete(backupPath);
 
-                // Clear the corrupted flag
-                using (IDbConnection db = new SqlConnection(Constants._connectionString))
-                {
-                    string updateSql = @"
-                        INSERT INTO LogTable (FileName, ToBeDeleted, Corrupted, CreatedAt)
-                        VALUES (@FileName, 0, 0, GETDATE())";
-
-                    db.Execute(updateSql, new { FileName = fileName });
-                }
+                // Clear the corrupted flag (a Marked-for-deletion flag stays), and remake the thumbnail
+                Flags.Set(folder, fileName, false, flags.ToBeDeleted);
+                Thumbnails.Forget(folder, fileName);
 
                 return Json(new { success = true, message = "File fixed and re-verified." });
             }

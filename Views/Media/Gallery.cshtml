@@ -182,9 +182,9 @@
                         title="${isFavorite ? "Remove from Favorites" : "Add to Favorites"}">${isFavorite ? "&#9733; Favorite" : "&#9734; Favorite"}</button>`;
         }
 
-        // The picture / player / document preview for one gallery item
-        function itemMediaHtml(path) {
-            return T.mediaHtml(mediaUrl(path), path, { compact: true, maxHeight: '400px', sizeAttrs: 'width="500" height="400"' });
+        // The picture / player / document preview for one gallery item (thumb: its thumbnail URL, if it has one)
+        function itemMediaHtml(path, thumb) {
+            return T.mediaHtml(mediaUrl(path), path, { compact: true, maxHeight: '400px', sizeAttrs: 'width="500" height="400"', thumb });
         }
 
         function joinPath(sub, name) { return sub ? sub + '/' + name : name; }
@@ -284,7 +284,7 @@
                                 <h4>${safe}</h4>
                                 ${sub ? `<div class="item-sub">in <a href="${T.escapeHtml(T.galleryUrl(item.Folder))}">&#128193; ${T.escapeHtml(sub)}</a></div>` : ''}
 
-                                <div class="media-body">${itemMediaHtml(key)}</div>
+                                <div class="media-body">${itemMediaHtml(key, item.Thumb)}</div>
 
                                 <div class="media-actions" style="margin-top: 10px;">
                                     ${favButtonHtml(file, !!item.Favorite)}
@@ -407,7 +407,7 @@
                 $item.attr('data-file', newName).attr('data-key', newKey);
                 $item.find('h4').text(newName);
                 $item.find('[data-file]').attr('data-file', newName);
-                $item.find('.media-body').html(itemMediaHtml(newKey));
+                $item.find('.media-body').html(itemMediaHtml(newKey)); // the old thumbnail went with the old name
                 T.loadTextPreviews($item);
                 const $view = $item.find('.viewBtn');
                 $view.text(T.kindOf(newName) === 'document' ? 'Open' : 'View');
@@ -417,13 +417,13 @@
         $(document).on("click", ".corruptedBtn", function () {
             const $btn = $(this);
             const file = itemFile($btn);
-            T.markCorrupted(file).then(() => $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, true)));
+            T.markCorrupted(itemFolder($btn), file).then(() => $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, true)));
         });
 
         $(document).on("click", ".unmarkBtn", function () {
             const $btn = $(this);
             const file = itemFile($btn);
-            T.unmark(file).then(() => $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false)), () => { });
+            T.unmark(itemFolder($btn), file).then(() => $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false)), () => { });
         });
 
         $(document).on("click", ".fixBtn", function () {

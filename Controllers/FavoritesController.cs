@@ -1,8 +1,6 @@
 using MediaManager.Filters;
 using MediaManager.Models;
-using MediaManager.Models.Constants;
 using System;
-using System.IO;
 using System.Linq;
 using System.Web.Mvc;
 
@@ -20,6 +18,8 @@ namespace MediaManager.Controllers
             public DateTime CreatedAt { get; set; }
             public bool Exists { get; set; }
             public string Url { get; set; }
+            /// <summary>Thumbnail URL, or null to show the file itself.</summary>
+            public string ThumbUrl { get; set; }
         }
 
         public ActionResult Index()
@@ -27,14 +27,16 @@ namespace MediaManager.Controllers
             var items = Favorites.GetAll().Select(f =>
             {
                 string path = MediaPaths.ResolveFile(f.Folder, f.FileName);
+                bool exists = path != null && System.IO.File.Exists(path);
                 return new FavoriteView
                 {
                     FavoriteId = f.FavoriteId,
                     Folder = f.Folder,
                     FileName = f.FileName,
                     CreatedAt = f.CreatedAt,
-                    Exists = path != null && System.IO.File.Exists(path),
-                    Url = MediaPaths.UrlFor(f.Folder + "/" + f.FileName)
+                    Exists = exists,
+                    Url = MediaPaths.UrlFor(f.Folder + "/" + f.FileName),
+                    ThumbUrl = exists ? Thumbnails.UrlFor(Url, f.Folder, f.FileName) : null
                 };
             }).ToList();
 
