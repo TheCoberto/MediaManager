@@ -117,6 +117,9 @@
     .chip-count { opacity: .65; font-size: 12px; margin-left: 3px; }
     .subs-toggle { margin-left: 12px; font-weight: normal; white-space: nowrap; cursor: pointer; }
     .item-sub { margin: -6px 0 8px; font-size: 13px; opacity: .8; }
+
+    /* Pictures and document cards open when tapped (videos / audio keep their own controls) */
+    .media-body img, .media-body .doc-card { cursor: pointer; }
 </style>
 
 <div id="imageContainer" style="text-align: center;"></div>
@@ -384,6 +387,20 @@
 
         $(document).on("click", ".viewBtn", function () {
             window.location.href = T.viewUrl(itemFolder($(this)), itemFile($(this)));
+        });
+
+        // Tapping a picture (or a document card) opens it, like View / Open. Ctrl / Cmd / Shift-click opens a new tab.
+        // While selecting, a tap ticks it instead. Videos and audio aren't included: a tap there is play / pause.
+        $(document).on("click", ".media-body img, .media-body .doc-card", function (e) {
+            const $item = itemOf($(this));
+            if ($('body').hasClass('selecting')) {
+                setSelected($item, !$item.hasClass('is-selected'));
+                updateSelBar();
+                return;
+            }
+            const url = T.viewUrl(itemFolder($item), itemFile($item)); // read now, so it's right after a rename
+            if (e.ctrlKey || e.metaKey || e.shiftKey) window.open(url, '_blank');
+            else window.location.href = url;
         });
 
         $(document).on("click", ".downloadBtn", function () {
