@@ -20,6 +20,7 @@ set of features (for example a family media site and a separate private one).
 - [Debugging in Visual Studio](#debugging-in-visual-studio)
 - [Scripts](#scripts)
 - [Troubleshooting](#troubleshooting)
+- [History](#history)
 
 ## Features
 
@@ -299,6 +300,19 @@ while debugging. It works under real IIS.
   a SQL login (step 2).
 - **Other devices can't connect.** Check the firewall rule for the site's port (step 6) and that the
   devices are on the same network.
+
+## History
+
+Media Manager replaces two earlier ASP.NET MVC projects of mine, which are now archived:
+
+- **[ContentCatalog](https://github.com/TheCoberto/ContentCatalog)** (2024): a content catalog for images,
+  sounds and videos, stored as database records. Its image pages became the Uploads pages here.
+- **CastafraySoundCatalog** (2025, private): a password-protected gallery of a media folder. Its login,
+  Gallery, viewer, upload and Storage Random pages became the core of Media Manager.
+
+Media Manager started over in a new repository in November 2026 and doesn't include their commit history.
+It also adds thumbnails, favorites, flagging, the Recycle Bin, bulk download, the downloaders and support
+for running several sites.
 
 ## License
 
