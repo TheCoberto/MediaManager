@@ -36,7 +36,6 @@ namespace MediaManager.Models.Constants
 
             // Non-media folders that can sit next to media when a whole drive is the media root
             "Documents",
-            "GS",
             "Gamevault",
 
             // The site's Recycle Bin (Models/RecycleBin.cs), uploads in progress (Models/ChunkedUpload.cs)
