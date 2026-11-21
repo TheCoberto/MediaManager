@@ -82,8 +82,9 @@ namespace MediaManager.Models
             try
             {
                 string part = Path.Combine(MediaPaths.Root, FolderName, uploadId + ".part");
-                if (File.Exists(part))
-                    File.Delete(part);
+                foreach (string f in new[] { part, part + ".fixed" }) // ".fixed": made seekable (Models/VideoIndex.cs)
+                    if (File.Exists(f))
+                        File.Delete(f);
             }
             catch (IOException)
             {
@@ -103,7 +104,7 @@ namespace MediaManager.Models
         // Uploads abandoned part-way (tab closed, connection lost) are deleted after a day.
         private static void CleanUpAbandoned(string dir)
         {
-            foreach (var f in new DirectoryInfo(dir).EnumerateFiles("*.part"))
+            foreach (var f in new DirectoryInfo(dir).EnumerateFiles("*.part*"))
             {
                 try
                 {

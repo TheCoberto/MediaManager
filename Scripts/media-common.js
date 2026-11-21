@@ -226,6 +226,16 @@
         return post(URLS.fix, { fileName: file, folder: folder }).then(function () { showToast("File fixed!"); return true; });
     }
 
+    // Videos ffmpeg can rewrite with a proper index (Models/VideoIndex.cs)
+    function canFixSeeking(file) { return /\.(mp4|mov|webm)$/i.test(file); }
+
+    // Rewrites a video so desktop players can seek in it. Resolves with the server's answer ({ fixed, message });
+    // rejects if it failed. onlyIfNeeded: leave it alone if it's already fine (no confirmation, for several files).
+    function fixSeeking(folder, file, onlyIfNeeded) {
+        return post(URLS.fixSeeking, { folder: folder, fileName: file, onlyIfNeeded: !!onlyIfNeeded },
+            function () { return !!onlyIfNeeded; }); // several files: the caller lists what failed
+    }
+
     function setFavorite(folder, file, favorite) {
         return post(URLS.setFavorite, { folder: folder, file: file, favorite: favorite }).then(function () {
             showToast(favorite ? "Added to Favorites" : "Removed from Favorites");
@@ -501,6 +511,8 @@
         markCorrupted: markCorrupted,
         unmark: unmark,
         fix: fix,
+        canFixSeeking: canFixSeeking,
+        fixSeeking: fixSeeking,
         setFavorite: setFavorite,
         viewUrl: viewUrl,
         galleryUrl: galleryUrl,

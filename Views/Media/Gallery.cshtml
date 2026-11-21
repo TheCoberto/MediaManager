@@ -88,6 +88,8 @@
 <div id="selBar" class="sel-bar" style="display:none;">
     <span id="selCount">0 selected</span>
     <button type="button" id="selDownloadBtn" class="btn btn-success btn-sm" disabled>&#11015; Download</button>
+    <button type="button" id="selFixSeekingBtn" class="btn btn-default btn-sm" disabled
+            title="Fix the selected videos you can't skip through in Photos / Media Player. Videos that are fine are left alone.">Fix seeking</button>
     <button type="button" id="selAllBtn" class="btn btn-default btn-sm" title="Tick every file shown so far">Select all shown</button>
     <button type="button" id="selClearBtn" class="btn btn-default btn-sm">Clear</button>
     <button type="button" id="selDoneBtn" class="btn btn-default btn-sm">Done</button>
@@ -468,7 +470,39 @@
             selected.forEach(size => total += size);
             $('#selCount').text(selected.size + ' selected' + (selected.size ? ' · ' + formatSize(total) : ''));
             $('#selDownloadBtn').prop('disabled', selected.size === 0);
+            $('#selFixSeekingBtn').prop('disabled', fixableSelected().length === 0);
         }
+
+        function fixableSelected() { return Array.from(selected.keys()).filter(T.canFixSeeking); }
+
+        // Fix seeking: one video at a time; ones that are already fine are left alone (Models/VideoIndex.cs)
+        $('#selFixSeekingBtn').on('click', async function () {
+            const keys = fixableSelected();
+            if (!keys.length) return;
+            if (!confirm(`Check ${keys.length} video${keys.length === 1 ? '' : 's'} and fix the ones you can't skip through in Photos / Media Player?\n\n` +
+                'Videos that are fine are left alone. Fixed ones keep their quality, name and dates.')) return;
+
+            document.querySelectorAll('video').forEach(v => v.pause()); // so none is playing while it's replaced
+            const $btn = $(this).prop('disabled', true);
+            let fixedCount = 0, fine = 0;
+            const failed = [];
+
+            for (let i = 0; i < keys.length; i++) {
+                $btn.text(`Fixing ${i + 1} of ${keys.length}...`);
+                const slash = keys[i].lastIndexOf('/');
+                const itemFolder = slash < 0 ? folder : (folder ? folder + '/' : '') + keys[i].slice(0, slash);
+                try {
+                    const res = await T.fixSeeking(itemFolder, keys[i].slice(slash + 1), true);
+                    if (res.fixed) fixedCount++; else fine++;
+                } catch (err) {
+                    failed.push(keys[i] + ': ' + err.message);
+                }
+            }
+
+            $btn.text('Fix seeking').prop('disabled', false);
+            alert(`Fixed: ${fixedCount}\nAlready fine: ${fine}` +
+                (failed.length ? `\nCouldn't fix ${failed.length}:\n\n${failed.join('\n')}` : ''));
+        });
 
         function setSelected($item, on) {
             const key = $item.attr('data-key');
