@@ -50,7 +50,8 @@ namespace MediaManager.Models
         /// The thumbnail URL for a file, or null if it doesn't get one (show the file itself). The URL changes when
         /// the file does, so browsers can keep thumbnails for a long time.
         /// </summary>
-        public static string UrlFor(UrlHelper url, string folder, string fileName, FileInfo info = null)
+        /// <param name="evenIfSmall">Also for small JPEG / PNG (the View page's stand-in when the browser can't show the file).</param>
+        public static string UrlFor(UrlHelper url, string folder, string fileName, FileInfo info = null, bool evenIfSmall = false)
         {
             string ext = Path.GetExtension(fileName ?? "").ToLowerInvariant();
             bool drawing = DrawingExtensions.Contains(ext);
@@ -67,7 +68,7 @@ namespace MediaManager.Models
 
             try
             {
-                if (!info.Exists || (drawing && info.Length < SmallImageBytes))
+                if (!info.Exists || (drawing && info.Length < SmallImageBytes && !evenIfSmall))
                     return null;
                 if (!drawing && !File.Exists(SiteSettings.FfmpegPath))
                     return null;
@@ -112,9 +113,18 @@ namespace MediaManager.Models
                 temp = thumb + "." + Guid.NewGuid().ToString("N") + ".tmp";
 
                 string ext = Path.GetExtension(fileName).ToLowerInvariant();
-                bool made = DrawingExtensions.Contains(ext)
-                    ? MakeWithDrawing(sourcePath, temp)
-                    : await MakeWithFfmpegAsync(sourcePath, temp, AppConstants.VideoExtensions.Contains(ext)).ConfigureAwait(false);
+                bool made;
+                if (DrawingExtensions.Contains(ext))
+                {
+                    // A ".jpg" that's really HEIC / WebP / AVIF (apps save those under any name): Windows can't read it,
+                    // ffmpeg usually can
+                    made = TryMakeWithDrawing(sourcePath, temp)
+                        ?? await MakeWithFfmpegAsync(sourcePath, temp, isVideo: false).ConfigureAwait(false);
+                }
+                else
+                {
+                    made = await MakeWithFfmpegAsync(sourcePath, temp, AppConstants.VideoExtensions.Contains(ext)).ConfigureAwait(false);
+                }
 
                 if (!made || !File.Exists(temp) || new FileInfo(temp).Length == 0)
                 {
@@ -197,6 +207,24 @@ namespace MediaManager.Models
         // ---------- JPEG / PNG ----------
 
         private const int ExifOrientation = 0x0112;
+
+        /// <summary>
+        /// MakeWithDrawing, but null (instead of an exception) when Windows can't read the file at all, so the caller
+        /// can try ffmpeg. False still means "made on purpose without a thumbnail" (a transparent PNG).
+        /// </summary>
+        private static bool? TryMakeWithDrawing(string sourcePath, string target)
+        {
+            try
+            {
+                return MakeWithDrawing(sourcePath, target);
+            }
+            catch (Exception ex) when (ex is OutOfMemoryException || ex is ArgumentException || ex is ExternalException)
+            {
+                // System.Drawing's way of saying "not an image I can read"
+                TryDelete(target);
+                return null;
+            }
+        }
 
         private static bool MakeWithDrawing(string sourcePath, string target)
         {

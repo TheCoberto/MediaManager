@@ -383,6 +383,15 @@ namespace MediaManager.Controllers
             ViewBag.Folder = folder;
             ViewBag.File = file;
             ViewBag.Url = MediaPaths.VersionedUrl(MediaPaths.ToRelative(fullPath), info);
+
+            // Pictures: what the file really is (apps save other formats under ".jpg" names), and a JPEG the server
+            // makes to show instead if the browser can't show the file itself
+            if (MediaPaths.KindOf(file) == MediaKind.Image)
+            {
+                var format = FileFormat.Detect(fullPath);
+                ViewBag.RealFormat = FileFormat.NameMismatch(format, file) ? format : null;
+                ViewBag.Fallback = Thumbnails.UrlFor(Url, folder, file, info, evenIfSmall: true);
+            }
             var model = new FileViewModel
             {
                 FileName = info.Name,
