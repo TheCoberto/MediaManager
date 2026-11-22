@@ -2,14 +2,11 @@
 
 Ideas for later, roughly in order of usefulness. Done so far: Fix Seeking for fragmented MP4 / WebM videos (#6); versioned script links
 (`Url.Versioned`), so browsers pick up new scripts after a deploy; busy buttons reset themselves if the
-page's script crashes (`MediaTools.busy` / `idle`).
+page's script crashes (`MediaTools.busy` / `idle`); Fix Seeking checks its copy with ffprobe and the copy's
+own headers before it replaces anything.
 
 ## Follow-ups from Fix Seeking (#6)
 
-- **Check the result after a rewrite.** After ffmpeg rewrites a video, have ffprobe read its length and
-  compare it with the original before replacing the file. Windows Photos showed a fixed FadCam video as
-  "123299:11" long instead of 6:50. FadCam's own files store a length of 0 in `mvhd` / `tkhd` / `mdhd`
-  (it's in the fragments instead), so the rewritten header is the first thing to look at.
 - **Fix FadCam videos in bulk.** Either set FadCam to save ordinary MP4s, if it has that option, or add a
   "fix every video in this folder that needs it" action (Gallery's Select mode does this one page at a time).
 
