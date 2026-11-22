@@ -23,7 +23,9 @@ Both IIS sites run the same build of this repo. Each has its own folder publish 
    - `Invoke-WebRequest <Check URL> -UseBasicParsing` returns 200 at `/Login?returnUrl=/` (the first request after a publish can take a minute while the app starts).
 
    Done when both checks pass for every site published.
-4. **Report** what changed, which sites were published, and the check results. If the deploy changed any `Scripts/*.js`, tell the user to hard-refresh (Ctrl+F5) on each device until script links carry a version (see `IDEAS.md`); phones otherwise keep running the old script.
+4. **Report** what changed, which sites were published, and the check results.
+
+Site scripts are loaded through `Url.Versioned(...)` (`Helpers/UrlHelperExtensions.cs`), so browsers fetch a changed script on their next page load. A new view that loads a script with its own `<script>` tag should use it too.
 
 ## Gotchas
 

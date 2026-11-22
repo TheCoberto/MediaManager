@@ -135,6 +135,7 @@
     <Compile Include="Filters\FeatureAttribute.cs" />
     <Compile Include="Filters\GuestAllowedAttribute.cs" />
     <Compile Include="Filters\MediaAuthModule.cs" />
+    <Compile Include="Helpers\UrlHelperExtensions.cs" />
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>

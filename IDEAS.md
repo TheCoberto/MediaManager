@@ -1,14 +1,10 @@
 # Feature ideas
 
-Ideas for later, roughly in order of usefulness. Done so far: Fix Seeking for fragmented MP4 / WebM videos (#6).
+Ideas for later, roughly in order of usefulness. Done so far: Fix Seeking for fragmented MP4 / WebM videos (#6); versioned script links
+(`Url.Versioned`), so browsers pick up new scripts after a deploy.
 
 ## Follow-ups from Fix Seeking (#6)
 
-- **Version the script links.** Pages load `~/Scripts/media-common.js` with no version and IIS sends no
-  `Cache-Control`, so phones (DDG mobile especially) keep the old script after a deploy. New buttons then
-  throw before they reach the server and stick on "Fixing...". Add the file's last-write time to the URL
-  (`media-common.js?v=<ticks>`) through a small helper used by all five views that load it, so every
-  deploy is picked up straight away.
 - **Buttons recover from script errors.** Any button that switches to a busy label ("Fixing...",
   "Deleting...") should go back to normal and show a message if the action throws, not stay busy forever.
 - **Check the result after a rewrite.** After ffmpeg rewrites a video, have ffprobe read its length and
