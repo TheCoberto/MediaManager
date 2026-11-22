@@ -31,7 +31,11 @@ set of features (for example a family media site and a separate private one).
   it or press play. They're made the first time they're needed and kept in `<media folder>\.thumbs`.
   Videos, WebP and HEIC need ffmpeg; GIFs, small images and anything that can't be read are shown as they are.
 - **Viewer**: full-size images, streaming video and audio with seeking, and documents in the browser.
-- **Add Media**: upload files of any size (they're sent in pieces) into any folder.
+- **Add Media**: upload files of any size (they're sent in pieces) into any folder. Videos that desktop players
+  can't skip through (MP4s saved in fragments, as FadCam and many recorders and downloaders do, and WebM) get a
+  proper index on the way in, with ffmpeg and no re-encoding; other files are saved exactly as uploaded.
+- **Fix Seeking**: the same fix for videos already in the media folder: a button on the View page, or for several
+  at once from the Gallery's Select mode (videos that are already fine are left alone).
 - **Favorites**: star files and see them all on one page.
 - **Flagged**: mark files for deletion or as corrupted, review them in one place, and repair corrupted
   videos with ffmpeg. Flags belong to one file, so two files with the same name in different folders

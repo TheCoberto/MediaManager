@@ -224,7 +224,9 @@
 
                     const result = await Q.sendChunked(uploadUrl, token, { newFileName: name, folder }, item.file, pct => {
                         fill.style.width = pct + '%';
-                        item.el.querySelector('.am-meta').textContent = Q.formatSize(item.file.size) + ' · uploading ' + pct + '%';
+                        // 99%: all sent, the server is saving it (videos may get an index added: Models/VideoIndex.cs)
+                        item.el.querySelector('.am-meta').textContent = Q.formatSize(item.file.size) +
+                            (pct >= 99 ? ' · finishing...' : ' · uploading ' + pct + '%');
                     });
 
                     if (result.ok && result.data && result.data.fileName) nameInput.value = result.data.fileName;

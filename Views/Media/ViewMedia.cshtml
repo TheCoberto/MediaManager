@@ -64,6 +64,10 @@
     {
         <button id="corruptedBtn">Mark Corrupted</button>
     }
+    @if (MediaManager.Models.VideoIndex.CanFix(System.IO.Path.GetExtension(file)))
+    {
+        <button id="fixSeekingBtn" title="For videos you can't skip through in Photos / Media Player. No quality is lost.">Fix Seeking</button>
+    }
     <button id="deleteBtn">Delete</button>
     <a href="@path" download="@file" style="margin-left:6px;">Download</a>
 </div>
@@ -130,6 +134,23 @@
                 T.fix(folder, file, () => $btn.prop('disabled', true).text('Fixing...')).then(
                     fixed => { if (fixed) location.reload(); },
                     () => $btn.prop('disabled', false).text('Fix File'));
+            });
+
+            // Rewrites the video with a proper index. The player lets go of the file first, so it can be replaced.
+            $('#fixSeekingBtn').on('click', function () {
+                if (!confirm('Fix "' + file + '" so you can skip through it in any video player?\n\n' +
+                    'The video and audio are copied as they are (no quality is lost). This takes a few seconds for most videos.')) return;
+                const $btn = $(this).prop('disabled', true).text('Fixing...');
+                const player = document.getElementById('mediaElement');
+                if (player && player.tagName === 'VIDEO') {
+                    player.pause();
+                    player.querySelectorAll('source').forEach(s => s.remove());
+                    player.load();
+                }
+                T.showToast('Fixing, please wait...');
+                T.fixSeeking(folder, file).then(
+                    res => { alert(res.message); location.reload(); },
+                    () => location.reload()); // the error was shown; bring the player back
             });
 
             // Left / right arrow keys: previous / next file

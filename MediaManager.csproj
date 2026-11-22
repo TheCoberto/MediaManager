@@ -149,6 +149,7 @@
     <Compile Include="Models\Thumbnails.cs" />
     <Compile Include="Models\MediaKind.cs" />
     <Compile Include="Models\ChunkedUpload.cs" />
+    <Compile Include="Models\VideoIndex.cs" />
     <Compile Include="Models\ZipDownload.cs" />
     <Compile Include="Models\GalleryOrder.cs" />
     <Compile Include="Controllers\BulkDownloadController.cs" />

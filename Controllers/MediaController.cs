@@ -221,7 +221,7 @@ namespace MediaManager.Controllers
         /// </summary>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public JsonResult AddMediaChunk(string uploadId, long offset, long totalSize, string fileName, string newFileName, string folder, HttpPostedFileBase chunk)
+        public async Task<JsonResult> AddMediaChunk(string uploadId, long offset, long totalSize, string fileName, string newFileName, string folder, HttpPostedFileBase chunk)
         {
             string error = CheckAddMedia(fileName, newFileName, folder, out var safeFolder, out var folderPath, out var targetName);
             if (error != null)
@@ -236,15 +236,46 @@ namespace MediaManager.Controllers
             if (!r.Complete)
                 return Json(new { success = true, complete = false });
 
+            string source = await MakeSeekableAsync(r.PartPath, Path.GetExtension(targetName));
+
             try
             {
-                return PlaceAddMedia(safeFolder, folderPath, targetName, target => System.IO.File.Move(r.PartPath, target));
+                return PlaceAddMedia(safeFolder, folderPath, targetName, target => System.IO.File.Move(source, target));
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
                 ChunkedUpload.Discard(uploadId);
                 return Json(new { success = false, message = "Couldn't save the file: " + ex.Message });
             }
+        }
+
+        /// <summary>
+        /// A finished upload that's a fragmented MP4 or a WebM (see Models/VideoIndex.cs) is rewritten so desktop
+        /// players can seek in it. Returns the file to put in place: the rewritten one, or the upload as it came
+        /// if it didn't need it or the rewrite didn't work (no ffmpeg, a damaged file).
+        /// </summary>
+        private static async Task<string> MakeSeekableAsync(string partPath, string ext)
+        {
+            if (!VideoIndex.NeedsFix(partPath, ext))
+                return partPath;
+
+            string fixedPath = partPath + ".fixed";
+            string error = await VideoIndex.RewriteAsync(partPath, fixedPath, ext);
+            if (error != null)
+            {
+                Trace.TraceWarning("Upload {0}: kept as uploaded, couldn't make it seekable: {1}", partPath, error);
+                return partPath;
+            }
+
+            try
+            {
+                System.IO.File.Delete(partPath);
+            }
+            catch (IOException)
+            {
+                // ".part" files are cleaned up after a day anyway
+            }
+            return fixedPath;
         }
 
         /// <summary>Checks an Add Media upload's name, type and folder. Returns an error message, or null if it's fine.</summary>
@@ -275,9 +306,10 @@ namespace MediaManager.Controllers
             if (!Constants.SupportedExtensions.Contains(uploadExt))
                 return "Unsupported file type: " + (uploadExt.Length > 0 ? uploadExt : "(no extension)") + ".";
 
-            // If no extension was typed, keep the uploaded file's one
-            targetName = newFileName.Trim();
-            if (!targetName.Contains("."))
+            // Unless the name typed ends in a file type the site knows, add the uploaded file's one
+            // ("Trip v1.2" -> "Trip v1.2.mp4", not a file of type ".2"). Windows drops trailing dots anyway.
+            targetName = newFileName.Trim().TrimEnd('.');
+            if (!Constants.SupportedExtensions.Contains(Path.GetExtension(targetName).ToLowerInvariant()))
                 targetName += uploadExt;
 
             return MediaPaths.IsPlainFileName(targetName) ? null : "File name is invalid.";
@@ -831,6 +863,34 @@ namespace MediaManager.Controllers
             {
                 return Json(new { success = false, message = ex.Message });
             }
+        }
+
+        /// <summary>
+        /// Rewrites a video so desktop players can seek in it (Models/VideoIndex.cs): no re-encoding, same name and
+        /// dates. onlyIfNeeded (Gallery, several files): leaves files alone that are already fine, answering fixed = false.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<JsonResult> FixSeeking(string folder, string fileName, bool onlyIfNeeded = false)
+        {
+            string serverPath = MediaPaths.ResolveFile(folder, fileName);
+            if (serverPath == null || !System.IO.File.Exists(serverPath))
+                return Json(new { success = false, message = "File not found." });
+
+            string ext = Path.GetExtension(serverPath);
+            if (!VideoIndex.CanFix(ext))
+                return Json(new { success = false, message = "Only MP4, MOV and WebM videos can be fixed this way." });
+
+            if (onlyIfNeeded && !VideoIndex.NeedsFix(serverPath, ext))
+                return Json(new { success = true, @fixed = false, message = "Already seekable." });
+
+            string error = await VideoIndex.FixInPlaceAsync(serverPath);
+            if (error != null)
+                return Json(new { success = false, message = error });
+
+            Thumbnails.Forget(folder, Path.GetFileName(serverPath));
+            InvalidateFolderCache(folder);
+            return Json(new { success = true, @fixed = true, message = "Fixed: you can skip through it in any player now." });
         }
     }
 }
