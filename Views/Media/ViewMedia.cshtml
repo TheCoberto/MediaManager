@@ -131,16 +131,16 @@
 
             $('#fixBtn').on('click', function () {
                 const $btn = $(this);
-                T.fix(folder, file, () => $btn.prop('disabled', true).text('Fixing...')).then(
+                T.fix(folder, file, () => T.busy($btn, 'Fixing...')).then(
                     fixed => { if (fixed) location.reload(); },
-                    () => $btn.prop('disabled', false).text('Fix File'));
+                    () => T.idle($btn));
             });
 
             // Rewrites the video with a proper index. The player lets go of the file first, so it can be replaced.
             $('#fixSeekingBtn').on('click', function () {
                 if (!confirm('Fix "' + file + '" so you can skip through it in any video player?\n\n' +
                     'The video and audio are copied as they are (no quality is lost). This takes a few seconds for most videos.')) return;
-                const $btn = $(this).prop('disabled', true).text('Fixing...');
+                T.busy($(this), 'Fixing...');
                 const player = document.getElementById('mediaElement');
                 if (player && player.tagName === 'VIDEO') {
                     player.pause();
