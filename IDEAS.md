@@ -4,7 +4,8 @@ Ideas for later, roughly in order of usefulness. Done so far: Fix Seeking for fr
 (`Url.Versioned`), so browsers pick up new scripts after a deploy; busy buttons reset themselves if the
 page's script crashes (`MediaTools.busy` / `idle`); Fix Seeking checks its copy with ffprobe and the copy's
 own headers before it replaces anything; AVI videos play in the browser through an MP4 copy
-(`Models/PlayableCopy.cs`); the Duplicates page (`Models/DuplicateFinder.cs`).
+(`Models/PlayableCopy.cs`); the Duplicates page (`Models/DuplicateFinder.cs`); the Activity page
+(`Models/ActivityLog.cs`).
 
 ## Follow-ups from Fix Seeking (#6)
 
@@ -19,12 +20,6 @@ own headers before it replaces anything; AVI videos play in the browser through 
   would keep it from growing.
 - **More formats.** `PlayableCopy.Extensions` only lists `.avi`. MKV, WMV and FLV could use the same path once
   they're added to `Constants.VideoExtensions` (and given a `<mimeMap>` in Web.config).
-
-## Seeing what the server did
-
-- **Activity log page.** Recent uploads, fixes, moves, deletes and errors, owner only. Today warnings go
-  to `Trace` and the IIS logs need admin rights, so "is it stuck or still working?" can't be answered from
-  the site itself.
 
 ## Follow-ups from Duplicates
 

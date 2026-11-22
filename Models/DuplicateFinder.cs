@@ -78,6 +78,10 @@ namespace MediaManager.Models
                     scan.FilesFound = files.Count;
                     scan.Groups = FindGroups(files, scan, both.Token);
                     scan.Phase = "done";
+                    long extra = scan.Groups.Sum(g => new FileInfo(g[0]).Length * (g.Count - 1));
+                    ActivityLog.Write(ActivityLog.Duplicates, $"Scanned {Where(scan)}: {files.Count} files, {scan.Groups.Count} with copies "
+                        + $"({scan.Groups.Sum(g => g.Count - 1)} extra, {ActivityLog.FormatBytes(extra)})"
+                        + (scan.Skipped > 0 ? $", {scan.Skipped} couldn't be read." : "."));
                 }
                 catch (OperationCanceledException)
                 {
@@ -85,9 +89,9 @@ namespace MediaManager.Models
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceWarning("Duplicate scan of {0} failed: {1}", folderPath, ex);
                     scan.Error = ex.Message;
                     scan.Phase = "failed";
+                    ActivityLog.Error(ActivityLog.Duplicates, $"Scan of {Where(scan)} failed: {ex.Message}");
                 }
                 finally
                 {
@@ -95,6 +99,11 @@ namespace MediaManager.Models
                 }
             }
         }
+
+        private static string Where(Scan scan) =>
+            scan.Folder.Length == 0
+                ? (scan.Subfolders ? "the whole library" : "the top folder")
+                : scan.Folder + (scan.Subfolders ? " and its subfolders" : "");
 
         /// <summary>
         /// Groups of identical files (physical paths) among <paramref name="files"/>, most space to free first, each
