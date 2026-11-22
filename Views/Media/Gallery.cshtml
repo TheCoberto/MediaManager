@@ -494,7 +494,16 @@
             const $btn = $(this);
             const file = itemFile($btn);
             T.fix(itemFolder($btn), file, () => T.busy($btn, "Fixing...")).then(
-                fixed => { T.idle($btn); if (fixed) $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false)); },
+                fixed => {
+                    T.idle($btn);
+                    if (!fixed) return;
+                    // Show the repaired file, not the one the browser cached (a new ?v= makes it load again)
+                    const $item = itemOf($btn), key = itemKey($btn);
+                    CACHE_BUSTER = Date.now();
+                    $item.find('.media-body').html(itemMediaHtml(key));
+                    $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false));
+                    T.showToast('Fixed "' + file + '": showing the repaired file.', 5000);
+                },
                 () => T.idle($btn));
         });
 

@@ -172,7 +172,7 @@ else
                 const $btn = $(this);
                 const r = rowInfo(this);
                 T.fix(r.folder, r.file, () => T.busy($btn, 'Fixing...')).then(
-                    fixed => { if (fixed) location.reload(); }, // fixing clears Corrupted (a deletion flag stays)
+                    fixed => { if (fixed) T.reloadWithMessage('Fixed "' + r.file + '": its Corrupted flag is cleared.'); }, // a deletion flag stays
                     () => T.idle($btn));
             });
 

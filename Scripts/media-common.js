@@ -27,12 +27,25 @@
         return (s || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
     }
 
-    function showToast(message) {
+    function showToast(message, ms) {
         var toast = $("#toast");
         toast.stop(true, true).text(message).fadeIn(200);
         clearTimeout(showToast._t);
-        showToast._t = setTimeout(function () { toast.fadeOut(400); }, 2000);
+        showToast._t = setTimeout(function () { toast.fadeOut(400); }, ms || 2000);
     }
+
+    // Reloads the page and shows a message once it's back (e.g. "Fixed" after Fix File, with the new file showing:
+    // media links carry the file's version, so the reloaded page loads the changed file, not the cached one).
+    var NOTICE_KEY = "mediaTools:notice";
+    function reloadWithMessage(message) {
+        try { sessionStorage.setItem(NOTICE_KEY, message); } catch (e) { }
+        location.reload();
+    }
+    $(function () {
+        var message = null;
+        try { message = sessionStorage.getItem(NOTICE_KEY); sessionStorage.removeItem(NOTICE_KEY); } catch (e) { }
+        if (message) showToast(message, 6000);
+    });
 
     function token() {
         return $('input[name="__RequestVerificationToken"]').first().val();
@@ -722,6 +735,7 @@
         escapeHtml: escapeHtml,
         normalizeFolder: normalizeFolder,
         showToast: showToast,
+        reloadWithMessage: reloadWithMessage,
         showLoginExpired: showLoginExpired,
         post: post,
         busy: busy,
