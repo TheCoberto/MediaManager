@@ -10,6 +10,21 @@ namespace MediaManager.Filters
         {
             var http = filterContext.HttpContext;
 
+            // The login is kept in the site's memory, which a deploy, an app pool recycle or a long time spent only
+            // watching a video (that doesn't touch the session) wipes. The browser's media pass (Models\MediaAccess:
+            // encrypted, tamper-proof, renewed while pictures and videos load, cleared at logout) says who it is,
+            // so log it back in from that.
+            if (http.Session["Auth"] == null)
+            {
+                var pass = MediaAccess.Read(http);
+                if (pass != null)
+                {
+                    http.Session["Auth"] = true;
+                    http.Session["Role"] = pass.Role;
+                    http.Session.Timeout = SiteSettings.LoginMinutes;
+                }
+            }
+
             if (http.Session["Auth"] == null)
             {
                 if (http.Request.IsAjaxRequest())

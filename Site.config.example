@@ -18,6 +18,7 @@
   <!-- Optional guest password: can only see and upload images in ImageUploadFolder.
          .\deploy\New-PasswordHash.ps1 -SiteConfig <path> -Key GuestPasswordHash -Restart -->
   <!-- <add key="GuestPasswordHash" value="..." /> -->
+<!-- <add key="LoginHours" value="12" /> -->          <!-- how long a login lasts unused; default 12, decimals allowed -->
   <!-- Folder (under the media root) for guest uploads; the only media guests can open. Default "Guest Uploads". -->
   <!-- <add key="ImageUploadFolder" value="Guest Uploads" /> -->
 

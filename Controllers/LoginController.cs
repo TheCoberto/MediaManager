@@ -85,7 +85,8 @@ namespace MediaManager.Controllers
             LoginThrottle.Reset(client);
             Session["Auth"] = true;
             Session["Role"] = role;
-            MediaAccess.Issue(HttpContext, role, Session.Timeout); // lets the browser load /media files
+            Session.Timeout = SiteSettings.LoginMinutes;            // Site.config LoginHours (default 12 hours)
+            MediaAccess.Issue(HttpContext, role, Session.Timeout); // lets the browser load /media files, and logs it back in (AuthFilter)
         }
     }
 }

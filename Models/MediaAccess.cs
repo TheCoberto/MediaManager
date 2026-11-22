@@ -13,8 +13,10 @@ namespace MediaManager.Models
     ///
     /// IIS serves /media files itself (fast, with seeking in videos), and the login session isn't available
     /// for those requests, so Filters\MediaAuthModule checks this cookie instead. It's issued at login,
-    /// refreshed by page and media requests, and removed at logout. Like the session, it runs out after the
-    /// session's idle time (20 minutes by default). It also says whether the holder is the owner or a guest.
+    /// refreshed by page and media requests, and removed at logout. It runs out after the login's idle time
+    /// (Site.config LoginHours, 12 hours by default), and goes when the browser closes. It also says whether the
+    /// holder is the owner or a guest, and Filters\AuthFilter uses it to log the browser back in when the site's
+    /// memory (where the login session lives) has been wiped by a deploy or recycle.
     /// </summary>
     public static class MediaAccess
     {
