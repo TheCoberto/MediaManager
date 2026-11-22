@@ -6,19 +6,13 @@ page's script crashes (`MediaTools.busy` / `idle`); Fix Seeking checks its copy 
 own headers before it replaces anything; AVI videos play in the browser through an MP4 copy
 (`Models/PlayableCopy.cs`); the Duplicates page (`Models/DuplicateFinder.cs`); the Activity page
 (`Models/ActivityLog.cs`); the Empty Folders page (`Models/EmptyFolders.cs`); Copy (next to Move); cancelling one
-upload in the Add Media queue; tags (`Models/Tags.cs`, Tags page, Gallery tag filter, Select > Tag).
-
-## Library tidying
-
-- **Storage overview.** A page listing which folders take the most space (sorted, with sizes and maybe a bar
-  chart), next to Duplicates and Empty Folders: the first thing to look at when the drive is filling up.
+upload in the Add Media queue; tags (`Models/Tags.cs`, Tags page, Gallery tag filter, Select > Tag); the Storage
+and Recently Added pages (`Models/LibraryIndex.cs`).
 
 ## Finding things
 
 - **Search the whole library by name.** A search box in the menu that finds files in any folder. The Gallery's
   search only covers the folder it's showing (and its subfolders with "Include subfolders").
-- **Recently added.** A page of the newest files across the library, so phone uploads and downloads are easy to
-  find and sort into folders.
 
 ## Watching
 

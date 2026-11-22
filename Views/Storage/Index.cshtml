@@ -1,0 +1,151 @@
+@using MediaManager.Models
+@model MediaManager.Controllers.StorageController.Overview
+@{
+    ViewBag.Title = "Storage";
+    Func<long, string> size = ActivityLog.FormatBytes;
+    long biggestFolder = Model.Folders.Any() ? Math.Max(1, Model.Folders.Max(f => f.Bytes)) : 1;
+    long biggestKind = Model.Kinds.Any() ? Math.Max(1, Model.Kinds.Max(k => k.Bytes)) : 1;
+    Func<long, long, string> pct = (part, whole) => (whole <= 0 ? 0 : Math.Max(0.5, part * 100.0 / whole)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    // Breadcrumb: Library > a > a/b
+    var parts = Model.Folder.Length == 0 ? new string[0] : Model.Folder.Split('/');
+}
+
+<h2>Storage</h2>
+
+<style>
+    .st-crumbs { margin: 6px 0 14px; word-break: break-all; }
+    .st-summary { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 16px; }
+    .st-summary div { min-width: 140px; }
+    .st-summary b { display: block; font-size: 22px; }
+    .st-drive { height: 12px; max-width: 520px; border-radius: 6px; background: rgba(127,127,127,.25); overflow: hidden; margin: 4px 0 2px; }
+    .st-drive > div { height: 100%; background: #2a7ae2; }
+    .st-table { width: 100%; max-width: 860px; }
+    .st-table td { padding: 5px 8px; vertical-align: middle; border-top: 1px solid rgba(127,127,127,.2); }
+    .st-name { word-break: break-all; }
+    .st-num { text-align: right; white-space: nowrap; }
+    .st-bar { width: 40%; min-width: 80px; }
+    .st-bar > div { height: 10px; border-radius: 5px; background: #2a7ae2; }
+    .st-bar.kind > div { background: #6c9a3f; }
+    .st-note { font-size: 13px; opacity: .75; }
+    h3 { margin-top: 26px; }
+</style>
+
+<div class="st-crumbs">
+    @Html.ActionLink("Whole library", "Index", new { folder = "" })
+    @for (int i = 0; i < parts.Length; i++)
+    {
+        <span>&rsaquo;</span>
+        @Html.ActionLink(parts[i], "Index", new { folder = string.Join("/", parts.Take(i + 1)) })
+    }
+    @if (Model.Folder.Length > 0)
+    {
+        <span style="margin-left:10px;">(@Html.ActionLink("open in Gallery", "Gallery", "Media", new { folder = Model.Folder }, null))</span>
+    }
+</div>
+
+<div class="st-summary">
+    <div><b>@size(Model.Bytes)</b>in @Model.Files.ToString("N0") file@(Model.Files == 1 ? "" : "s")</div>
+    @if (Model.DriveTotal != null)
+    {
+        long used = Model.DriveTotal.Value - Model.DriveFree.Value;
+        <div style="flex:1; min-width:240px;">
+            <b>@size(Model.DriveFree.Value) free</b>
+            on drive @Model.DriveName (@size(used) of @size(Model.DriveTotal.Value) used)
+            <div class="st-drive"><div style="width:@pct(used, Model.DriveTotal.Value)"></div></div>
+        </div>
+    }
+</div>
+
+<h3>Folders</h3>
+@if (!Model.Folders.Any())
+{
+    <p>Nothing here.</p>
+}
+else
+{
+    <table class="st-table">
+        @foreach (var f in Model.Folders)
+        {
+            <tr>
+                <td class="st-name">
+                    @if (f.Folder != null)
+                    {
+                        @Html.ActionLink(f.Name, "Index", new { folder = f.Folder })
+                    }
+                    else
+                    {
+                        <i>@f.Name</i>
+                    }
+                </td>
+                <td class="st-bar"><div style="width:@pct(f.Bytes, biggestFolder)"></div></td>
+                <td class="st-num">@size(f.Bytes)</td>
+                <td class="st-num st-note">@f.Files.ToString("N0") file@(f.Files == 1 ? "" : "s")</td>
+            </tr>
+        }
+    </table>
+}
+
+<h3>By kind</h3>
+<table class="st-table">
+    @foreach (var k in Model.Kinds)
+    {
+        <tr>
+            <td class="st-name">@k.Label</td>
+            <td class="st-bar kind"><div style="width:@pct(k.Bytes, biggestKind)"></div></td>
+            <td class="st-num">@size(k.Bytes)</td>
+            <td class="st-num st-note">@k.Files.ToString("N0") file@(k.Files == 1 ? "" : "s")</td>
+        </tr>
+    }
+</table>
+
+<h3>Biggest files</h3>
+<table class="st-table">
+    @foreach (var f in Model.Biggest)
+    {
+        <tr>
+            <td class="st-name">
+                @if (f.Kind != null)
+                {
+                    @Html.ActionLink(f.Name, "ViewMedia", "Media", new { folder = f.Folder, file = f.Name }, null)
+                }
+                else
+                {
+                    @f.Name
+                }
+                <br /><span class="st-note">@(f.Folder.Length == 0 ? "(top folder)" : f.Folder)</span>
+            </td>
+            <td class="st-num">@size(f.Size)</td>
+            <td class="st-num st-note">modified @f.Modified.ToString("yyyy-MM-dd")</td>
+        </tr>
+    }
+</table>
+
+@if (Model.SiteFolders != null && Model.SiteFolders.Any())
+{
+    <h3>The site's own folders</h3>
+    <p class="st-note">Hidden from the galleries and not counted above.</p>
+    <table class="st-table">
+        @foreach (var s in Model.SiteFolders)
+        {
+            <tr>
+                <td class="st-name">@s.Label</td>
+                <td class="st-num">@size(s.Bytes)</td>
+            </tr>
+        }
+    </table>
+    <p class="st-note">
+        Emptying the @Html.ActionLink("Recycle Bin", "Index", "RecycleBin") frees its space. Thumbnails and AVI copies are
+        remade when needed. Looking for space to free? Try @Html.ActionLink("Duplicates", "Index", "Duplicates") and
+        @Html.ActionLink("Empty Folders", "Index", "EmptyFolders").
+    </p>
+}
+
+<p class="st-note" style="margin-top:24px;">
+    Figures from @Model.BuiltAt.ToString("HH:mm") (kept for 10 minutes).
+    @Html.ActionLink("Refresh now", "Index", new { folder = Model.Folder, refresh = true })
+    @if (Model.UnreadableFolders > 0)
+    {
+        <span>&middot; @Model.UnreadableFolders folder@(Model.UnreadableFolders == 1 ? "" : "s") couldn't be read and aren't counted.</span>
+    }
+</p>
