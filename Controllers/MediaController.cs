@@ -236,7 +236,7 @@ namespace MediaManager.Controllers
             if (!r.Complete)
                 return Json(new { success = true, complete = false });
 
-            string source = await MakeSeekableAsync(r.PartPath, Path.GetExtension(targetName));
+            string source = await MakeSeekableAsync(r.PartPath, safeFolder, targetName);
 
             try
             {
@@ -245,6 +245,7 @@ namespace MediaManager.Controllers
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
                 ChunkedUpload.Discard(uploadId);
+                ActivityLog.Error(ActivityLog.Upload, "Couldn't save the upload: " + ex.Message, safeFolder, targetName);
                 return Json(new { success = false, message = "Couldn't save the file: " + ex.Message });
             }
         }
@@ -254,8 +255,9 @@ namespace MediaManager.Controllers
         /// players can seek in it. Returns the file to put in place: the rewritten one, or the upload as it came
         /// if it didn't need it or the rewrite didn't work (no ffmpeg, a damaged file).
         /// </summary>
-        private static async Task<string> MakeSeekableAsync(string partPath, string ext)
+        private static async Task<string> MakeSeekableAsync(string partPath, string folder, string name)
         {
+            string ext = Path.GetExtension(name);
             if (!VideoIndex.NeedsFix(partPath, ext))
                 return partPath;
 
@@ -263,9 +265,10 @@ namespace MediaManager.Controllers
             string error = await VideoIndex.RewriteAsync(partPath, fixedPath, ext);
             if (error != null)
             {
-                Trace.TraceWarning("Upload {0}: kept as uploaded, couldn't make it seekable: {1}", partPath, error);
+                ActivityLog.Error(ActivityLog.Upload, "Kept as uploaded: couldn't make it seekable: " + error, folder, name);
                 return partPath;
             }
+            ActivityLog.Write(ActivityLog.Fix, "Rewrote the upload so it seeks in every player.", folder, name);
 
             try
             {
@@ -326,8 +329,11 @@ namespace MediaManager.Controllers
             for (int n = 2; System.IO.File.Exists(Path.Combine(folderPath, name)); n++)
                 name = $"{baseName} ({n}){ext}";
 
-            place(Path.Combine(folderPath, name));
+            string placed = Path.Combine(folderPath, name);
+            place(placed);
             InvalidateFolderCache(safeFolder);
+            ActivityLog.Write(ActivityLog.Upload, "Uploaded (" + ActivityLog.FormatBytes(new FileInfo(placed).Length) + ")"
+                + (name == requestedName ? "." : ", saved under a new name because \"" + requestedName + "\" already existed."), safeFolder, name);
 
             string message = name == requestedName
                 ? "\"" + name + "\" uploaded to " + safeFolder + "."
@@ -399,6 +405,7 @@ namespace MediaManager.Controllers
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);
             InvalidateFolderCache(folder);
+            ActivityLog.Write(ActivityLog.Delete, "Moved to the Recycle Bin.", folder, file);
 
             return Json(new { success = true });
         }
@@ -432,6 +439,8 @@ namespace MediaManager.Controllers
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);
             InvalidateFolderCache(folder);
+            ActivityLog.Write(ActivityLog.Duplicates, "Moved to the Recycle Bin as a copy of "
+                + MediaPaths.NormalizeFolder(keepFolder) + "/" + keepFile + ".", folder, file);
 
             return Json(new { success = true });
         }
@@ -461,6 +470,7 @@ namespace MediaManager.Controllers
             Thumbnails.Forget(folder, oldName);
             PlayableCopy.Forget(folder, oldName);
             InvalidateFolderCache(folder);
+            ActivityLog.Write(ActivityLog.Rename, "Renamed from \"" + oldName + "\".", folder, newName);
 
             return Json(new { success = true, newName });
         }
@@ -514,6 +524,8 @@ namespace MediaManager.Controllers
 
             InvalidateFolderCache(folder);
             InvalidateFolderCache(newFolder);
+            ActivityLog.Write(ActivityLog.Move, "Moved here from " + (MediaPaths.NormalizeFolder(folder) is string from && from.Length > 0 ? from : "(top folder)")
+                + (newName != file ? " as \"" + newName + "\" (\"" + file + "\" was taken)." : "."), newFolder, newName);
 
             return Json(new { success = true, newName });
         }
@@ -611,11 +623,13 @@ namespace MediaManager.Controllers
                 }
 
                 InvalidateAllMediaCaches();
+                ActivityLog.Write(ActivityLog.Delete, message + " (folder " + folder + ")");
                 return Json(new { success = true, message, parent });
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException)
             {
                 // e.g. a file inside is open in another program: the move is all-or-nothing, so nothing changed
+                ActivityLog.Error(ActivityLog.Delete, "Couldn't delete the folder " + folder + ": " + ex.Message);
                 return Json(new { success = false, message = "Couldn't delete the folder (nothing was changed): " + ex.Message });
             }
         }
@@ -867,6 +881,7 @@ namespace MediaManager.Controllers
                     if (process.ExitCode != 0)
                     {
                         if (System.IO.File.Exists(tempOutput)) System.IO.File.Delete(tempOutput);
+                        ActivityLog.Error(ActivityLog.Fix, "Fix File failed: ffmpeg: " + stderrOutput, folder, fileName);
                         return Json(new { success = false, message = "FFmpeg failed: " + stderrOutput });
                     }
                 }
@@ -894,10 +909,12 @@ namespace MediaManager.Controllers
                 Thumbnails.Forget(folder, fileName);
                 PlayableCopy.Forget(folder, fileName);
 
+                ActivityLog.Write(ActivityLog.Fix, "Fix File converted it and cleared the Corrupted flag.", folder, fileName);
                 return Json(new { success = true, message = "File fixed and re-verified." });
             }
             catch (Exception ex)
             {
+                ActivityLog.Error(ActivityLog.Fix, "Fix File failed: " + ex.Message, folder, fileName);
                 return Json(new { success = false, message = ex.Message });
             }
         }
@@ -921,13 +938,17 @@ namespace MediaManager.Controllers
             if (onlyIfNeeded && !VideoIndex.NeedsFix(serverPath, ext))
                 return Json(new { success = true, @fixed = false, message = "Already seekable." });
 
+            string name = Path.GetFileName(serverPath);
             string error = await VideoIndex.FixInPlaceAsync(serverPath);
             if (error != null)
+            {
+                ActivityLog.Error(ActivityLog.Fix, "Fix Seeking didn't change it: " + error, folder, name);
                 return Json(new { success = false, message = error });
+            }
 
-            Thumbnails.Forget(folder, Path.GetFileName(serverPath));
-
-            PlayableCopy.Forget(folder, Path.GetFileName(serverPath));
+            ActivityLog.Write(ActivityLog.Fix, "Fix Seeking rewrote it so it seeks in every player.", folder, name);
+            Thumbnails.Forget(folder, name);
+            PlayableCopy.Forget(folder, name);
             InvalidateFolderCache(folder);
             return Json(new { success = true, @fixed = true, message = "Fixed: you can skip through it in any player now." });
         }

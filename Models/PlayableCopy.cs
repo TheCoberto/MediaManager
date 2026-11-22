@@ -100,11 +100,13 @@ namespace MediaManager.Models
         {
             string error;
             bool entered = false;
+            var timer = new Stopwatch();
             try
             {
                 await Gate.WaitAsync(ct).ConfigureAwait(false);
                 entered = true;
                 job.Started = true;
+                timer.Start();
                 error = await MakeAsync(sourcePath, copy, source.LastWriteTimeUtc, p => job.Percent = p, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -122,10 +124,18 @@ namespace MediaManager.Models
             }
 
             // Note the failure before the job goes, so the page never sees "none" in between and starts it again
+            string relative = MediaPaths.ToRelative(sourcePath);
+            int slash = relative.LastIndexOf('/');
+            string folder = slash < 0 ? "" : relative.Substring(0, slash);
             if (error != null)
             {
-                Trace.TraceWarning("Playable copy of {0} failed: {1}", sourcePath, error);
                 MemoryCache.Default.Set(FailKey(copy, source), error, DateTimeOffset.Now.Add(RetryFailedAfter));
+                ActivityLog.Error(ActivityLog.Playable, "Couldn't make a copy browsers can play: " + error, folder, source.Name);
+            }
+            else
+            {
+                ActivityLog.Write(ActivityLog.Playable, $"Made a copy browsers can play ({ActivityLog.FormatBytes(new FileInfo(copy).Length)}, "
+                    + $"took {Math.Max(1, (int)timer.Elapsed.TotalSeconds)}s).", folder, source.Name);
             }
             Jobs.TryRemove(copy, out _);
         }

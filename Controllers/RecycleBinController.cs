@@ -33,11 +33,14 @@ namespace MediaManager.Controllers
         {
             try
             {
-                TempData["Message"] = "Restored to " + RecycleBin.Restore(id);
+                string restoredTo = RecycleBin.Restore(id);
+                TempData["Message"] = "Restored to " + restoredTo;
+                ActivityLog.Write(ActivityLog.RecycleBin, "Restored from the Recycle Bin to " + restoredTo + ".");
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 TempData["Error"] = "Couldn't restore: " + ex.Message;
+                ActivityLog.Error(ActivityLog.RecycleBin, "Couldn't restore an item: " + ex.Message);
             }
             return RedirectToAction("Index");
         }
@@ -48,7 +51,9 @@ namespace MediaManager.Controllers
         {
             try
             {
+                string name = RecycleBin.Get(id)?.FileName;
                 RecycleBin.DeleteForever(id);
+                ActivityLog.Write(ActivityLog.RecycleBin, "Deleted forever from the Recycle Bin" + (name == null ? "." : ": " + name));
                 TempData["Message"] = "Deleted forever.";
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
@@ -66,6 +71,7 @@ namespace MediaManager.Controllers
             {
                 int count = RecycleBin.Empty();
                 TempData["Message"] = $"Recycle Bin emptied ({count} item{(count == 1 ? "" : "s")} deleted forever).";
+                ActivityLog.Write(ActivityLog.RecycleBin, (string)TempData.Peek("Message"));
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {

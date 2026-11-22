@@ -12,6 +12,9 @@ namespace MediaManager
             FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
             RouteConfig.RegisterRoutes(RouteTable.Routes);
             BundleConfig.RegisterBundles(BundleTable.Bundles);
+
+            // Server warnings / errors (Trace.TraceWarning / TraceError) go to the Activity page too
+            System.Diagnostics.Trace.Listeners.Add(new Models.ActivityLogTraceListener());
         }
     }
 }

@@ -1,0 +1,92 @@
+@using MediaManager.Models
+@model List<ActivityLog.Entry>
+@{
+    ViewBag.Title = "Activity";
+    bool errorsOnly = ViewBag.Errors == true;
+    int pageSize = ViewBag.PageSize;
+
+    Func<string, string> label = kind =>
+    {
+        switch (kind)
+        {
+            case ActivityLog.Upload: return "Upload";
+            case ActivityLog.Delete: return "Delete";
+            case ActivityLog.Rename: return "Rename";
+            case ActivityLog.Move: return "Move";
+            case ActivityLog.Fix: return "Fix";
+            case ActivityLog.Playable: return "AVI copy";
+            case ActivityLog.Duplicates: return "Duplicates";
+            case ActivityLog.RecycleBin: return "Recycle Bin";
+            case ActivityLog.Login: return "Login";
+            case ActivityLog.Server: return "Server";
+            default: return kind;
+        }
+    };
+}
+
+<h2>Activity</h2>
+<p style="opacity:.8;">
+    What the site has done lately, newest first: uploads, moves, renames, deletes, fixes, AVI copies, duplicate scans,
+    Recycle Bin changes, logins, and anything that went wrong on the server. Kept for @ActivityLog.KeepDays days.
+</p>
+
+<style>
+    .act-filters { margin: 10px 0 15px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .act-filters a { padding: 4px 12px; border: 1px solid rgba(127,127,127,.5); border-radius: 14px; text-decoration: none; }
+    .act-filters a.active { background: #2a7ae2; border-color: #2a7ae2; color: #fff; }
+    .act-table td { vertical-align: top; }
+    .act-time { white-space: nowrap; opacity: .8; }
+    .act-kind { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; background: rgba(127,127,127,.2); white-space: nowrap; }
+    .act-error td { background: rgba(217,83,79,.12); }
+    .act-error .act-kind { background: #d9534f; color: #fff; }
+    .act-file { word-break: break-all; }
+    .act-file small { opacity: .75; }
+    .act-msg { word-break: break-word; }
+</style>
+
+<div class="act-filters">
+    <a href="@Url.Action("Index")" class="@(errorsOnly ? "" : "active")">Everything</a>
+    <a href="@Url.Action("Index", new { errors = true })" class="@(errorsOnly ? "active" : "")">Errors only</a>
+</div>
+
+@if (ViewBag.LoadError != null)
+{
+    <div class="alert alert-warning">
+        Couldn't read the activity log. If the site was just updated, its database may need SQL\Schema.sql applied
+        (<code>deploy\Setup-Database.ps1</code>).<br /><small>@ViewBag.LoadError</small>
+    </div>
+}
+else if (!Model.Any())
+{
+    <p>@(errorsOnly ? "No errors logged." : "Nothing logged yet.")</p>
+}
+else
+{
+    <table class="table table-condensed act-table">
+        <thead>
+            <tr><th>When</th><th>What</th><th>File</th><th>Details</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var e in Model)
+            {
+                <tr class="@(e.IsError ? "act-error" : "")">
+                    <td class="act-time" title="@e.At.ToString("yyyy-MM-dd HH:mm:ss")">@e.At.ToString("MMM d, HH:mm")</td>
+                    <td><span class="act-kind">@label(e.Kind)@(e.IsError ? " error" : "")</span></td>
+                    <td class="act-file">
+                        @if (e.FileName != null && e.Folder != null)
+                        {
+                            @Html.ActionLink(e.FileName, "ViewMedia", "Media", new { folder = e.Folder, file = e.FileName }, null)
+                            <br /><small>@(e.Folder.Length == 0 ? "(top folder)" : e.Folder)</small>
+                        }
+                    </td>
+                    <td class="act-msg">@e.Message</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    if (Model.Count == pageSize)
+    {
+        <p>@Html.ActionLink("Older entries →", "Index", new { before = Model.Last().ActivityId, errors = errorsOnly ? (bool?)true : null })</p>
+    }
+}

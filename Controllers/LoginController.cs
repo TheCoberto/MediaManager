@@ -47,6 +47,7 @@ namespace MediaManager.Controllers
             if (PasswordHasher.Verify(password, ownerHash))
             {
                 LogIn(client, Roles.Owner);
+                ActivityLog.Write(ActivityLog.Login, "Owner logged in from " + client + ".");
                 // Back to where you were when the login expired (only pages on this site)
                 return !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
                     ? (ActionResult)Redirect(returnUrl)
@@ -57,10 +58,12 @@ namespace MediaManager.Controllers
             if (guestHash != null && PasswordHasher.Verify(password, guestHash))
             {
                 LogIn(client, Roles.Guest);
+                ActivityLog.Write(ActivityLog.Login, "Guest logged in from " + client + ".");
                 return RedirectToAction("ImageViewAll", "Images");
             }
 
             var pause = LoginThrottle.RecordFailure(client, out int triesLeft);
+            ActivityLog.Error(ActivityLog.Login, "Wrong password from " + client + (pause > TimeSpan.Zero ? " (paused for " + LoginThrottle.Describe(pause) + ")" : "") + ".");
             if (pause > TimeSpan.Zero)
                 ViewBag.Error = $"Wrong password. Too many wrong passwords: wait {LoginThrottle.Describe(pause)}, then try again.";
             else if (triesLeft <= 2)

@@ -130,6 +130,25 @@ CREATE TABLE dbo.Favorites (
     CreatedAt  DATETIME       NOT NULL DEFAULT GETDATE()
 );
 GO
+-- What the site has been doing (Activity page, Models/ActivityLog.cs). Entries older than 60 days are removed by the app.
+IF OBJECT_ID('dbo.ActivityLog', 'U') IS NULL
+CREATE TABLE dbo.ActivityLog (
+    ActivityId INT IDENTITY(1,1) PRIMARY KEY,
+    At         DATETIME2(0)   NOT NULL CONSTRAINT DF_ActivityLog_At DEFAULT SYSDATETIME(),
+    Kind       NVARCHAR(30)   NOT NULL,          -- upload, delete, rename, move, fix, playable, duplicates, recyclebin, login, server
+    Folder     NVARCHAR(1000) NULL,              -- relative to the media root ('' = root); NULL if it isn't about one file
+    FileName   NVARCHAR(400)  NULL,
+    Message    NVARCHAR(2000) NOT NULL,
+    IsError    BIT            NOT NULL CONSTRAINT DF_ActivityLog_IsError DEFAULT 0
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.ActivityLog') AND name = 'IX_ActivityLog_At')
+    CREATE INDEX IX_ActivityLog_At ON dbo.ActivityLog (At);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.ActivityLog') AND name = 'IX_ActivityLog_Errors')
+    CREATE INDEX IX_ActivityLog_Errors ON dbo.ActivityLog (IsError, ActivityId DESC);
+GO
+
 -- ============================================================
 -- Stored procedures (used by the Guest Uploads page)
 -- ============================================================
