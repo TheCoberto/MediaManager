@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -164,6 +165,8 @@ namespace MediaManager.Models
                 return "Only MP4, MOV and WebM videos can be fixed this way.";
             if (!File.Exists(SiteSettings.FfmpegPath))
                 return "ffmpeg wasn't found at " + SiteSettings.FfmpegPath + ".";
+            if (!File.Exists(SiteSettings.FfprobePath))
+                return "ffprobe wasn't found at " + SiteSettings.FfprobePath + " (it checks the fixed copy before anything is replaced).";
 
             // Video and audio only: phones add data tracks (motion / camera info) that MP4 files can't always hold.
             // -c copy: no re-encoding. Rotation and the recording date come along.
@@ -174,9 +177,9 @@ namespace MediaManager.Models
             await Gate.WaitAsync().ConfigureAwait(false);
             try
             {
-                string error = await RunFfmpegAsync(args).ConfigureAwait(false);
-                if (error == null && !LooksComplete(sourcePath, targetPath))
-                    error = "ffmpeg's copy came out much smaller than the original, so it wasn't used.";
+                string error = (await RunToolAsync(SiteSettings.FfmpegPath, args).ConfigureAwait(false)).Error;
+                if (error == null)
+                    error = await CheckCopyAsync(sourcePath, targetPath, format).ConfigureAwait(false);
                 if (error != null)
                     TryDelete(targetPath);
                 return error;
@@ -217,13 +220,161 @@ namespace MediaManager.Models
             }
         }
 
-        private static async Task<string> RunFfmpegAsync(string args)
+        // ---------- checking the copy before it's used ----------
+
+        /// <summary>
+        /// Checks ffmpeg's copy before it replaces anything: it's about the original's size (dropping only the index
+        /// and data tracks barely changes it; much smaller means video was lost), ffprobe reads the same length for
+        /// both, and for MP4 / MOV the lengths in the copy's headers match too. Windows Photos and Media Player show
+        /// the header's length, which ffprobe mostly works out from the video itself, so a copy can play fine
+        /// everywhere else and still show a wrong length there. Returns null if the copy is good, or why not.
+        /// </summary>
+        private static async Task<string> CheckCopyAsync(string sourcePath, string targetPath, string format)
         {
+            var target = new FileInfo(targetPath);
+            if (!target.Exists || target.Length < new FileInfo(sourcePath).Length * 0.8)
+                return "ffmpeg's copy came out much smaller than the original, so it wasn't used.";
+
+            double? copyLength = await ProbeLengthAsync(targetPath).ConfigureAwait(false);
+            if (copyLength == null || copyLength <= 0)
+                return "ffprobe couldn't read a length from the fixed copy, so it wasn't used.";
+
+            // A WebM being fixed often has no length of its own (that's the problem); its copy's is checked against itself below
+            double? originalLength = await ProbeLengthAsync(sourcePath).ConfigureAwait(false);
+            double expected = originalLength ?? copyLength.Value;
+            if (originalLength != null && !Close(copyLength.Value, expected))
+                return $"The fixed copy is {Describe(copyLength.Value)} long but the original is {Describe(expected)}, so it wasn't used.";
+
+            if (format == "webm")
+                return null;
+
+            string headerError = CheckHeaderLengths(targetPath, expected);
+            return headerError == null ? null : headerError + ", so it wasn't used.";
+        }
+
+        /// <summary>Lengths within 1 second or 2% of each other, whichever is more.</summary>
+        private static bool Close(double seconds, double expected) => Math.Abs(seconds - expected) <= Math.Max(1.0, expected * 0.02);
+
+        private static string Describe(double seconds)
+        {
+            if (seconds >= 100 * 3600)
+                return Math.Round(seconds / 3600) + " hours";
+            var t = TimeSpan.FromSeconds(Math.Round(seconds));
+            return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t:mm\\:ss}" : $"{t.Minutes}:{t:ss}";
+        }
+
+        /// <summary>The length ffprobe reads, in seconds, or null if it reads none (e.g. a WebM without one).</summary>
+        private static async Task<double?> ProbeLengthAsync(string path)
+        {
+            var result = await RunToolAsync(SiteSettings.FfprobePath,
+                $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{path}\"").ConfigureAwait(false);
+            return result.Error == null && double.TryParse(result.Output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
+                ? seconds
+                : (double?)null;
+        }
+
+        /// <summary>
+        /// Checks the lengths written in an MP4 / MOV's headers: the movie header (mvhd, the length desktop players
+        /// show) must match <paramref name="expected"/>, and each track's media header (mdhd) must be filled in and
+        /// no longer than that. Returns null if they're right, or what's wrong.
+        /// </summary>
+        private static string CheckHeaderLengths(string path, double expected)
+        {
+            double? movie = null;
+            var tracks = new List<double>();
+
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    foreach (var moov in Children(fs, 0, fs.Length, "moov"))
+                    {
+                        foreach (var mvhd in Children(fs, moov.Start, moov.End, "mvhd"))
+                            movie = ReadHeaderLength(fs, mvhd.Start);
+                        foreach (var trak in Children(fs, moov.Start, moov.End, "trak"))
+                            foreach (var mdia in Children(fs, trak.Start, trak.End, "mdia"))
+                                foreach (var mdhd in Children(fs, mdia.Start, mdia.End, "mdhd"))
+                                    tracks.Add(ReadHeaderLength(fs, mdhd.Start) ?? -1);
+                    }
+                }
+            }
+            catch (IOException ex)
+            {
+                return "Couldn't read the fixed copy's headers (" + ex.Message + ")";
+            }
+
+            if (movie == null || tracks.Count == 0)
+                return "The fixed copy has no length in its headers";
+            if (!Close(movie.Value, expected))
+                return $"The fixed copy's header says it's {Describe(movie.Value)} long (what Windows Photos would show) but it's really {Describe(expected)}";
+            foreach (double track in tracks)
+                if (track <= 0 || track > expected + Math.Max(1.0, expected * 0.02))
+                    return $"A track in the fixed copy says it's {(track <= 0 ? "empty" : Describe(track) + " long")} but the video is {Describe(expected)}";
+            return null;
+        }
+
+        /// <summary>
+        /// Seconds stored in an mvhd / mdhd box (same layout: version, flags, two dates, timescale, duration), or null
+        /// if it's unset or marked unknown (all ones).
+        /// </summary>
+        private static double? ReadHeaderLength(Stream s, long contentStart)
+        {
+            var buf = new byte[32];
+            s.Position = contentStart;
+            if (ReadFully(s, buf, 32) < 32)
+                return null;
+
+            bool v1 = buf[0] == 1;
+            int at = v1 ? 20 : 12;                          // 1 version + 3 flags + two 8-byte (v1) or 4-byte (v0) dates
+            ulong timescale = ReadUInt(buf, at, 4);
+            ulong duration = ReadUInt(buf, at + 4, v1 ? 8 : 4);
+            bool unknown = v1 ? duration == ulong.MaxValue : duration == uint.MaxValue;
+            return timescale == 0 || unknown ? (double?)null : (double)duration / timescale;
+        }
+
+        private static ulong ReadUInt(byte[] buf, int at, int bytes)
+        {
+            ulong value = 0;
+            for (int i = 0; i < bytes; i++)
+                value = (value << 8) | buf[at + i];
+            return value;
+        }
+
+        private struct Box
+        {
+            public long Start; // first byte after the box's header
+            public long End;
+        }
+
+        /// <summary>The boxes of type <paramref name="type"/> directly inside start..end (stops at a broken box).</summary>
+        private static IEnumerable<Box> Children(Stream s, long start, long end, string type)
+        {
+            long pos = start;
+            while (pos + 8 <= end && ReadBoxHeader(s, pos, end, out long size, out string found, out int header))
+            {
+                if (found == type)
+                    yield return new Box { Start = pos + header, End = pos + size };
+                pos += size;
+            }
+        }
+
+        // ---------- running ffmpeg / ffprobe ----------
+
+        private class ToolResult
+        {
+            public string Error;  // null if it worked
+            public string Output; // what it printed (ffprobe's answer)
+        }
+
+        private static async Task<ToolResult> RunToolAsync(string exe, string args)
+        {
+            string name = Path.GetFileNameWithoutExtension(exe);
             var psi = new ProcessStartInfo
             {
-                FileName = SiteSettings.FfmpegPath,
+                FileName = exe,
                 Arguments = args,
                 UseShellExecute = false,
+                RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
@@ -232,29 +383,28 @@ namespace MediaManager.Models
             {
                 using (var process = Process.Start(psi))
                 {
+                    var stdout = process.StandardOutput.ReadToEndAsync();
                     var stderr = process.StandardError.ReadToEndAsync();
                     var exited = Task.Run(() => process.WaitForExit((int)Timeout.TotalMilliseconds));
                     if (!await exited.ConfigureAwait(false))
                     {
                         try { process.Kill(); } catch (InvalidOperationException) { } // already gone
-                        return "ffmpeg took too long.";
+                        return new ToolResult { Error = name + " took too long." };
                     }
 
+                    string output = await stdout.ConfigureAwait(false);
                     string errors = (await stderr.ConfigureAwait(false)).Trim();
-                    return process.ExitCode == 0 ? null : "ffmpeg failed: " + (errors.Length > 0 ? errors : "exit code " + process.ExitCode);
+                    return new ToolResult
+                    {
+                        Output = output,
+                        Error = process.ExitCode == 0 ? null : name + " failed: " + (errors.Length > 0 ? errors : "exit code " + process.ExitCode)
+                    };
                 }
             }
             catch (System.ComponentModel.Win32Exception ex)
             {
-                return "Couldn't start ffmpeg: " + ex.Message;
+                return new ToolResult { Error = "Couldn't start " + name + ": " + ex.Message };
             }
-        }
-
-        // Dropping only the index and data tracks barely changes the size; a much smaller file means video was lost.
-        private static bool LooksComplete(string sourcePath, string targetPath)
-        {
-            var target = new FileInfo(targetPath);
-            return target.Exists && target.Length >= new FileInfo(sourcePath).Length * 0.8;
         }
 
         private static void TryDelete(string path)

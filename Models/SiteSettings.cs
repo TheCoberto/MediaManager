@@ -32,7 +32,7 @@ namespace MediaManager.Models
         /// <summary>Largest image a guest can upload. Site.config: GuestMaxUploadMB, default 50 MB.</summary>
         public static long GuestMaxUploadBytes => GetMegabytes("GuestMaxUploadMB", 50);
 
-        /// <summary>Folder containing ffmpeg.exe and yt-dlp.exe.</summary>
+        /// <summary>Folder containing ffmpeg.exe, ffprobe.exe and yt-dlp.exe.</summary>
         public static string ToolsFolder => Get("ToolsFolder", @"C:\Tools\");
 
         // Optional pages, switched per site with <add key="Feature:Name" value="true|false" /> in Site.config.
@@ -52,6 +52,8 @@ namespace MediaManager.Models
         }
 
         public static string FfmpegPath => Path.Combine(ToolsFolder, "ffmpeg.exe");
+
+        public static string FfprobePath => Path.Combine(ToolsFolder, "ffprobe.exe");
 
         public static string YtDlpPath => Path.Combine(ToolsFolder, "yt-dlp.exe");
 
