@@ -7,7 +7,8 @@
 <p style="opacity:.8;">
     Finds files with exactly the same contents, whatever they're called. Only files that share a size with another
     are read, so scanning is quick unless there are big videos to compare. Extra copies go to the
-    @Html.ActionLink("Recycle Bin", "Index", "RecycleBin"), so you can get them back.
+    @Html.ActionLink("Recycle Bin", "Index", "RecycleBin"), so you can get them back. Looking for folders with nothing
+    in them? Try @Html.ActionLink("Empty Folders", "Index", "EmptyFolders", new { folder }, null).
 </p>
 
 @Html.Partial("_MediaTools")

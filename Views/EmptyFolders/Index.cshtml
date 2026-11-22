@@ -1,0 +1,130 @@
+@using MediaManager.Models
+@model EmptyFolders.Result
+@{
+    ViewBag.Title = "Empty Folders";
+    string folder = ViewBag.Folder;
+    Func<long, string> size = ActivityLog.FormatBytes;
+}
+
+<h2>Empty Folders</h2>
+<p style="opacity:.8;">
+    Finds folders with nothing in them (or only files Windows makes by itself, like Thumbs.db and desktop.ini), and
+    folders whose files aren't photos, videos, audio or documents, which the Gallery shows as empty.
+    Looking for copies of the same file instead? Try @Html.ActionLink("Duplicates", "Index", "Duplicates", new { folder }, null).
+</p>
+
+@Html.Partial("_MediaTools")
+
+<style>
+    .ef-scope { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 15px; }
+    .ef-scope input[type=text] { min-width: 260px; flex: 1 1 260px; max-width: 520px; }
+    .ef-section { margin-top: 20px; }
+    .ef-list { list-style: none; padding: 0; margin: 8px 0; }
+    .ef-list li { padding: 5px 0; border-top: 1px solid rgba(127,127,127,.2); word-break: break-all; }
+    .ef-list label { font-weight: normal; margin: 0; cursor: pointer; }
+    .ef-list small { opacity: .75; }
+    .ef-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+</style>
+
+<form class="ef-scope" method="get" action="@Url.Action("Index")">
+    <label for="efFolder" style="margin:0;">Folder</label>
+    <input type="text" id="efFolder" name="folder" class="form-control" list="efFolderList" value="@folder" placeholder="(whole library)" />
+    <datalist id="efFolderList"></datalist>
+    <input type="hidden" name="scan" value="true" />
+    <button type="submit" id="efScanBtn" class="btn btn-primary">Find empty folders</button>
+</form>
+
+@if (Model != null)
+{
+    <p style="opacity:.8;">
+        Checked @Model.FoldersChecked.ToString("N0") folder@(Model.FoldersChecked == 1 ? "" : "s") in
+        @(folder.Length == 0 ? "the whole library" : folder).
+    </p>
+
+    <div class="ef-section">
+        <h3>Empty (@Model.Empty.Count)</h3>
+        @if (!Model.Empty.Any())
+        {
+            <p>No empty folders.</p>
+        }
+        else
+        {
+            <p style="opacity:.8;">
+                A folder with only empty folders inside shows once, as the top one. Deleting it removes everything
+                below it too. There's nothing in them to keep, so they're deleted outright (not moved to the Recycle Bin).
+            </p>
+            <div class="ef-actions">
+                <label style="font-weight:normal; margin:0;"><input type="checkbox" id="efAll" checked /> All</label>
+                <button type="button" id="efDeleteBtn" class="btn btn-danger btn-sm">Delete ticked folders</button>
+            </div>
+            <ul class="ef-list" id="efEmptyList">
+                @foreach (string f in Model.Empty)
+                {
+                    <li data-folder="@f">
+                        <label><input type="checkbox" class="efTick" checked /> @f</label>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="ef-section">
+        <h3>No photos, videos, audio or documents (@Model.NoMedia.Count)</h3>
+        @if (!Model.NoMedia.Any())
+        {
+            <p>None: every folder with files has something the site shows.</p>
+        }
+        else
+        {
+            <p style="opacity:.8;">
+                These have files, just not ones the site shows, so the Gallery looks empty. Check them in Windows
+                Explorer before deleting anything: they may hold things you want (installers, archives, project files).
+            </p>
+            <ul class="ef-list">
+                @foreach (var f in Model.NoMedia)
+                {
+                    <li>
+                        @f.Folder<br />
+                        <small>
+                            @f.FileCount file@(f.FileCount == 1 ? "" : "s"), @size(f.Bytes)@(f.Examples.Any() ? ": " + string.Join(", ", f.Examples) + (f.FileCount > f.Examples.Count ? ", ..." : "") : "")
+                        </small>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@section scripts {
+    <script src="@Url.Versioned("~/Scripts/media-common.js")"></script>
+    <script>
+        (function () {
+            const T = window.MediaTools;
+
+            $.getJSON(window.MEDIA_URLS.folders, { v: Date.now() }).done(list => {
+                $('#efFolderList').html((list || []).map(f => '<option value="' + T.escapeHtml(f) + '">').join(''));
+            });
+
+            // A big library takes a moment: show it's working
+            $('form.ef-scope').on('submit', () => T.busy($('#efScanBtn'), 'Looking...'));
+
+            $('#efAll').on('change', function () { $('.efTick').prop('checked', this.checked); });
+
+            $('#efDeleteBtn').on('click', function () {
+                const $rows = $('#efEmptyList li').filter((i, li) => $(li).find('.efTick').prop('checked'));
+                if (!$rows.length) return alert('Tick the folders to delete.');
+                if (!confirm(`Delete ${$rows.length} empty folder${$rows.length === 1 ? '' : 's'}? Each is checked again first; any that has a file in it now is left alone.`)) return;
+
+                const $btn = T.busy($(this), 'Deleting...');
+                const folders = $rows.map((i, li) => $(li).attr('data-folder')).get();
+                T.post('@Url.Action("DeleteEmptyFolders", "Media")', { folders: folders.join('\n') }).then(res => {
+                    T.idle($btn);
+                    const gone = new Set(res.deleted.map(f => f.toLowerCase()));
+                    $rows.filter((i, li) => gone.has($(li).attr('data-folder').toLowerCase())).remove();
+                    alert(`Deleted ${res.deleted.length} folder${res.deleted.length === 1 ? '' : 's'}.` +
+                        (res.skipped.length ? `\n\nLeft alone (${res.skipped.length}):\n\n${res.skipped.join('\n')}` : ''));
+                }, () => T.idle($btn));
+            });
+        })();
+    </script>
+}
