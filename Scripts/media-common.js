@@ -6,7 +6,8 @@
 
     MediaTools.rename / move / remove / markCorrupted / unmark / fix / setFavorite each show their dialog or
     confirmation, call the server, and return a Promise that resolves on success (and never resolves
-    if you cancel). Also sets up the video helpers every page wants: keep-your-place after full screen,
+    if you cancel). MediaTools.busy / idle show a button as working and put it back; buttons left busy are
+    reset if the page's script crashes. Also sets up the video helpers every page wants: keep-your-place after full screen,
     pause other videos when one plays, pause videos scrolled out of view, and J/K/L keyboard shortcuts.
 */
 (function ($) {
@@ -81,6 +82,37 @@
                 });
         });
     }
+
+    // ---------- busy buttons ----------
+    // busy($btn, "Fixing...") disables a button and shows what it's doing; idle($btn) puts its old label back.
+    // If the page's script crashes, or a request fails with nothing handling it, every busy button is put back
+    // and a message shown, so no button is left stuck on "Fixing..." with nothing happening.
+
+    var busyButtons = [];
+
+    function busy($btn, label) {
+        if ($btn.data("idleHtml") === undefined) $btn.data("idleHtml", $btn.html());
+        $btn.prop("disabled", true).text(label);
+        if (busyButtons.indexOf($btn[0]) < 0) busyButtons.push($btn[0]);
+        return $btn;
+    }
+
+    function idle($btn) {
+        var html = $btn.data("idleHtml");
+        if (html !== undefined) $btn.html(html).removeData("idleHtml");
+        $btn.prop("disabled", false);
+        busyButtons = busyButtons.filter(function (b) { return b !== $btn[0]; });
+        return $btn;
+    }
+
+    function recoverBusyButtons() {
+        if (!busyButtons.length) return;
+        busyButtons.slice().forEach(function (b) { idle($(b)); });
+        showToast("Something went wrong. Try again, or reload the page.");
+    }
+
+    window.addEventListener("error", recoverBusyButtons);
+    window.addEventListener("unhandledrejection", recoverBusyButtons);
 
     // ---------- actions ----------
 
@@ -218,7 +250,7 @@
     }
 
     // Resolves true when fixed, false if you cancelled; rejects if it failed.
-    // onStart runs once you confirm (e.g. to show "Fixing..." on the button).
+    // onStart runs once you confirm (e.g. T.busy($btn, "Fixing...")).
     function fix(folder, file, onStart) {
         if (!confirm('Run "' + file + '" through FFmpeg to fix it? This may take a minute.')) return Promise.resolve(false);
         if (onStart) onStart();
@@ -505,6 +537,8 @@
         showToast: showToast,
         showLoginExpired: showLoginExpired,
         post: post,
+        busy: busy,
+        idle: idle,
         rename: rename,
         move: move,
         remove: remove,

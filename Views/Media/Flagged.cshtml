@@ -171,9 +171,9 @@ else
             $(document).on('click', '.fixBtn', function () {
                 const $btn = $(this);
                 const r = rowInfo(this);
-                T.fix(r.folder, r.file, () => $btn.prop('disabled', true).text('Fixing...')).then(
+                T.fix(r.folder, r.file, () => T.busy($btn, 'Fixing...')).then(
                     fixed => { if (fixed) location.reload(); }, // fixing clears Corrupted (a deletion flag stays)
-                    () => $btn.prop('disabled', false).text('Fix File'));
+                    () => T.idle($btn));
             });
 
             // Deleting a file through the site clears its flags too

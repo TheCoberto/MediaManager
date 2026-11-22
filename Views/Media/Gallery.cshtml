@@ -448,9 +448,9 @@
         $(document).on("click", ".fixBtn", function () {
             const $btn = $(this);
             const file = itemFile($btn);
-            T.fix(itemFolder($btn), file, () => $btn.prop("disabled", true).text("Fixing...")).then(
-                fixed => { if (fixed) $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false)); },
-                () => $btn.prop("disabled", false).text("Fix File"));
+            T.fix(itemFolder($btn), file, () => T.busy($btn, "Fixing...")).then(
+                fixed => { T.idle($btn); if (fixed) $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false)); },
+                () => T.idle($btn));
         });
 
         // ---------- select files to download several at once ----------
@@ -483,23 +483,26 @@
                 'Videos that are fine are left alone. Fixed ones keep their quality, name and dates.')) return;
 
             document.querySelectorAll('video').forEach(v => v.pause()); // so none is playing while it's replaced
-            const $btn = $(this).prop('disabled', true);
+            const $btn = $(this);
             let fixedCount = 0, fine = 0;
             const failed = [];
 
-            for (let i = 0; i < keys.length; i++) {
-                $btn.text(`Fixing ${i + 1} of ${keys.length}...`);
-                const slash = keys[i].lastIndexOf('/');
-                const itemFolder = slash < 0 ? folder : (folder ? folder + '/' : '') + keys[i].slice(0, slash);
-                try {
-                    const res = await T.fixSeeking(itemFolder, keys[i].slice(slash + 1), true);
-                    if (res.fixed) fixedCount++; else fine++;
-                } catch (err) {
-                    failed.push(keys[i] + ': ' + err.message);
+            try {
+                for (let i = 0; i < keys.length; i++) {
+                    T.busy($btn, `Fixing ${i + 1} of ${keys.length}...`);
+                    const slash = keys[i].lastIndexOf('/');
+                    const itemFolder = slash < 0 ? folder : (folder ? folder + '/' : '') + keys[i].slice(0, slash);
+                    try {
+                        const res = await T.fixSeeking(itemFolder, keys[i].slice(slash + 1), true);
+                        if (res.fixed) fixedCount++; else fine++;
+                    } catch (err) {
+                        failed.push(keys[i] + ': ' + err.message);
+                    }
                 }
+            } finally {
+                T.idle($btn);
             }
 
-            $btn.text('Fix seeking').prop('disabled', false);
             alert(`Fixed: ${fixedCount}\nAlready fine: ${fine}` +
                 (failed.length ? `\nCouldn't fix ${failed.length}:\n\n${failed.join('\n')}` : ''));
         });
@@ -604,12 +607,12 @@
                         confirmName = typed.trim();
                     }
 
-                    $btn.prop('disabled', true).text('Deleting...');
+                    T.busy($btn, 'Deleting...');
                     T.post('@Url.Action("DeleteFolder", "Media")', { folder, confirmName }).then(res => {
                         alert(res.message);
                         // Go up a level (or home for a top-level folder)
                         window.location.href = res.parent ? T.galleryUrl(res.parent) : '@Url.Action("Index", "Home")';
-                    }, () => $btn.prop('disabled', false).html('&#128465; Delete folder'));
+                    }, () => T.idle($btn));
                 })
                 .fail(xhr => { if (xhr.status !== 401) alert("Couldn't check the folder (" + xhr.status + ")."); });
         });

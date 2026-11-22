@@ -190,9 +190,9 @@ else
 
             $('#fixBtn').on('click', function () {
                 const $btn = $(this);
-                T.fix(folder, file, () => $btn.prop('disabled', true).text('Fixing...')).then(
+                T.fix(folder, file, () => T.busy($btn, 'Fixing...')).then(
                     fixed => { if (fixed) location.reload(); },
-                    () => $btn.prop('disabled', false).text('Fix File'));
+                    () => T.idle($btn));
             });
 
             // Dimensions / video length come from the browser once the file has loaded

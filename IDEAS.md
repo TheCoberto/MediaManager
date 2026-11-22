@@ -1,12 +1,11 @@
 # Feature ideas
 
 Ideas for later, roughly in order of usefulness. Done so far: Fix Seeking for fragmented MP4 / WebM videos (#6); versioned script links
-(`Url.Versioned`), so browsers pick up new scripts after a deploy.
+(`Url.Versioned`), so browsers pick up new scripts after a deploy; busy buttons reset themselves if the
+page's script crashes (`MediaTools.busy` / `idle`).
 
 ## Follow-ups from Fix Seeking (#6)
 
-- **Buttons recover from script errors.** Any button that switches to a busy label ("Fixing...",
-  "Deleting...") should go back to normal and show a message if the action throws, not stay busy forever.
 - **Check the result after a rewrite.** After ffmpeg rewrites a video, have ffprobe read its length and
   compare it with the original before replacing the file. Windows Photos showed a fixed FadCam video as
   "123299:11" long instead of 6:50. FadCam's own files store a length of 0 in `mvhd` / `tkhd` / `mdhd`
