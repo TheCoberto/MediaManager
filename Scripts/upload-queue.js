@@ -6,6 +6,8 @@
         (no 500 MB / 2 GB request ceiling, no request timeouts)
       - every file gets its own progress and its own success/error, and a bad file doesn't stop the rest
       - a dropped connection only re-sends the piece it was on (3 tries)
+      - an upload can be cancelled part way (newControl / cancel): the piece being sent is stopped, and the
+        page asks the server to throw away what it has so far
     The server joins the pieces (Models/ChunkedUpload.cs) and moves the finished file into place.
 */
 (function () {
@@ -38,7 +40,7 @@
      * POSTs one piece. Resolves with { ok, message, data, retry } where retry = true means
      * "worth trying again" (network error, server error) rather than a real "no".
      */
-    function postPiece(url, token, fields, blob, fileName, onLoaded) {
+    function postPiece(url, token, fields, blob, fileName, onLoaded, control) {
         return new Promise(function (resolve) {
             var form = new FormData();
             form.append("__RequestVerificationToken", token);
@@ -73,20 +75,41 @@
                 resolve({ ok: false, retry: true, message: "Network error: check the connection and try again." });
             });
 
+            xhr.addEventListener("abort", function () {
+                resolve({ ok: false, cancelled: true, message: "Cancelled" });
+            });
+
+            if (control) control.xhr = xhr;
             xhr.send(form);
         });
+    }
+
+    /** Something to pass to sendChunked so the upload can be cancelled with cancel(control). */
+    function newControl() {
+        return { cancelled: false, uploadId: null, xhr: null };
+    }
+
+    /** Stops an upload started with this control. sendChunked then resolves with { cancelled: true }. */
+    function cancel(control) {
+        if (!control || control.cancelled) return;
+        control.cancelled = true;
+        if (control.xhr) control.xhr.abort();
     }
 
     /**
      * Uploads one file in pieces. Always resolves (never rejects) with { ok, message, data }:
      * data is the server's answer to the last piece (e.g. data.fileName = the name it was saved as).
      * fields are sent with every piece. onProgress(percent) is called as it goes.
+     * control (from newControl, optional): lets the caller cancel it; resolves with { cancelled: true } then,
+     * and control.uploadId says which upload the server should throw away.
      */
-    async function sendChunked(url, token, fields, file, onProgress, chunkSize) {
+    async function sendChunked(url, token, fields, file, onProgress, chunkSize, control) {
         chunkSize = chunkSize || DEFAULT_CHUNK;
         if (!file.size) return { ok: false, message: "The file is empty." };
 
         var id = newUploadId();
+        if (control) control.uploadId = id;
+        var cancelled = { ok: false, cancelled: true, message: "Cancelled" };
         var offset = 0;
         var result = null;
 
@@ -97,9 +120,11 @@
             var meta = Object.assign({}, fields, { uploadId: id, offset: start, totalSize: file.size, fileName: file.name });
 
             for (var attempt = 1; ; attempt++) {
+                if (control && control.cancelled) return cancelled;
                 result = await postPiece(url, token, meta, blob, file.name, function (loaded) {
                     if (onProgress) onProgress(Math.min(99, Math.floor((start + loaded) / file.size * 100)));
-                });
+                }, control);
+                if (result.cancelled || (control && control.cancelled)) return cancelled;
                 if (result.ok) break;
 
                 // The piece got there but the answer didn't (then we re-sent it): carry on from where the server is.
@@ -120,6 +145,8 @@
         isImage: isImage,
         isVideo: isVideo,
         isAudio: isAudio,
-        sendChunked: sendChunked
+        sendChunked: sendChunked,
+        newControl: newControl,
+        cancel: cancel
     };
 })();

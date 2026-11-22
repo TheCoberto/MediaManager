@@ -25,6 +25,8 @@ namespace MediaManager.Models
         public const string Delete = "delete";
         public const string Rename = "rename";
         public const string Move = "move";
+        public const string Copy = "copy";
+        public const string Tags = "tags";
         public const string Fix = "fix";
         public const string Playable = "playable";
         public const string Duplicates = "duplicates";

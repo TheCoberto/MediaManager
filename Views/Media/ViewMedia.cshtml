@@ -51,6 +51,7 @@
         @Html.Raw(isFavorite ? "&#9733; Favorite" : "&#9734; Favorite")
     </button>
     <button id="moveBtn">Move</button>
+    <button id="copyBtn">Copy</button>
     <button id="renameBtn">Rename</button>
     @if (isCorrupted)
     {
@@ -71,6 +72,9 @@
     <button id="deleteBtn">Delete</button>
     <a href="@path" download="@file" style="margin-left:6px;">Download</a>
 </div>
+
+@* Filled in by MediaTools.tagEditor: this file's tags and a box to add one *@
+<div id="tagEditor"></div>
 
 <div class="file-info" style="max-width:600px; margin:25px auto 0; padding:15px; border:1px solid #ccc; border-radius:6px;">
     <h4 style="margin-top:0;">File info</h4>
@@ -121,6 +125,8 @@
             });
 
             $('#moveBtn').on('click', () => T.move(folder, file).then(goOn));
+            $('#copyBtn').on('click', () => T.copy(folder, file));
+            T.tagEditor(document.getElementById('tagEditor'), folder, file);
             $('#deleteBtn').on('click', () => T.remove(folder, file).then(goOn));
             $('#renameBtn').on('click', () => T.rename(folder, file).then(newName =>
                 window.location.replace(T.viewUrl(folder, newName))));

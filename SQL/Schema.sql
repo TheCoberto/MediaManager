@@ -130,6 +130,31 @@ CREATE TABLE dbo.Favorites (
     CreatedAt  DATETIME       NOT NULL DEFAULT GETDATE()
 );
 GO
+-- The owner's tags (Tags page, Models/Tags.cs) and which files carry each one. Kept in step with
+-- Rename/Move/Delete done through the site, like Favorites.
+IF OBJECT_ID('dbo.Tags', 'U') IS NULL
+CREATE TABLE dbo.Tags (
+    TagId     INT IDENTITY(1,1) PRIMARY KEY,
+    Name      NVARCHAR(100) NOT NULL CONSTRAINT UQ_Tags_Name UNIQUE,   -- unique ignoring case (the database's collation)
+    CreatedAt DATETIME2(0)  NOT NULL CONSTRAINT DF_Tags_CreatedAt DEFAULT SYSDATETIME()
+);
+GO
+IF OBJECT_ID('dbo.MediaTags', 'U') IS NULL
+CREATE TABLE dbo.MediaTags (
+    TagId     INT            NOT NULL CONSTRAINT FK_MediaTags_Tags REFERENCES dbo.Tags (TagId) ON DELETE CASCADE,
+    Folder    NVARCHAR(1000) NOT NULL,     -- relative to the media root ('' = root)
+    FileName  NVARCHAR(400)  NOT NULL,
+    TaggedAt  DATETIME2(0)   NOT NULL CONSTRAINT DF_MediaTags_TaggedAt DEFAULT SYSDATETIME(),
+    MediaTagId INT IDENTITY(1,1) PRIMARY KEY
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.MediaTags') AND name = 'IX_MediaTags_File')
+    CREATE INDEX IX_MediaTags_File ON dbo.MediaTags (FileName) INCLUDE (Folder, TagId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.MediaTags') AND name = 'IX_MediaTags_Tag')
+    CREATE INDEX IX_MediaTags_Tag ON dbo.MediaTags (TagId) INCLUDE (Folder, FileName, TaggedAt);
+GO
+
 -- What the site has been doing (Activity page, Models/ActivityLog.cs). Entries older than 60 days are removed by the app.
 IF OBJECT_ID('dbo.ActivityLog', 'U') IS NULL
 CREATE TABLE dbo.ActivityLog (

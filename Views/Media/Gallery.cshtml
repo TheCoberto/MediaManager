@@ -54,6 +54,11 @@
         <option value="name-desc">Name Z &rarr; A</option>
     </select>
 
+    <label for="tagFilter" style="margin-left:10px; font-weight:normal;">Tag:</label>
+    <select id="tagFilter" style="padding:7px; border-radius:5px;" title="Only show files with this tag">
+        <option value="">(all files)</option>
+    </select>
+
     @if (subfolders.Any())
     {
         <label class="subs-toggle" title="Also show (and play) everything in the subfolders, mixed in with this folder's files">
@@ -90,6 +95,7 @@
 <div id="selBar" class="sel-bar" style="display:none;">
     <span id="selCount">0 selected</span>
     <button type="button" id="selDownloadBtn" class="btn btn-success btn-sm" disabled>&#11015; Download</button>
+    <button type="button" id="selTagBtn" class="btn btn-default btn-sm" disabled title="Put a tag on every selected file">&#127991; Tag</button>
     <button type="button" id="selFixSeekingBtn" class="btn btn-default btn-sm" disabled
             title="Fix the selected videos you can't skip through in Photos / Media Player. Videos that are fine are left alone.">Fix seeking</button>
     <button type="button" id="selAllBtn" class="btn btn-default btn-sm" title="Tick every file shown so far">Select all shown</button>
@@ -196,6 +202,18 @@
 
         function joinPath(sub, name) { return sub ? sub + '/' + name : name; }
 
+        // A file's tags under its picture (they're added and removed on its View page, or with Select > Tag)
+        function tagListHtml(tags) {
+            return tags && tags.length
+                ? `<div class="tag-list">${tags.map(t => `<span class="tag-chip">${T.escapeHtml(t)}</span>`).join('')}</div>`
+                : '';
+        }
+
+        // Tag filter: only files with this tag (its id), remembered per folder in this tab
+        const TAG_KEY = 'galleryTag:' + folder.toLowerCase();
+        let tagFilter = '';
+        try { tagFilter = sessionStorage.getItem(TAG_KEY) || ''; } catch (e) { }
+
         function isVideoFile(file) {
             return T.kindOf(file) === 'video';
         }
@@ -251,6 +269,7 @@
 
             const params = { folder, search: searchTerm, sort: sortOrder, seed: shuffleSeed, subfolders: includeSubs, v: Date.now() };
             if (cursor !== null) params.after = cursor;
+            if (tagFilter) params.tag = tagFilter;
 
             $.getJSON('@Url.Action("GetMedia", "Media")', params)
                 .done(function (response) {
@@ -292,12 +311,14 @@
                                 ${sub ? `<div class="item-sub">in <a href="${T.escapeHtml(T.galleryUrl(item.Folder))}">&#128193; ${T.escapeHtml(sub)}</a></div>` : ''}
 
                                 <div class="media-body">${itemMediaHtml(key, item.Thumb)}</div>
+                                ${tagListHtml(item.Tags)}
 
                                 <div class="media-actions" style="margin-top: 10px;">
                                     ${favButtonHtml(file, !!item.Favorite)}
                                     <button class="viewBtn" data-file="${safe}">${T.kindOf(file) === 'document' ? 'Open' : 'View'}</button>
                                     <button class="downloadBtn" data-file="${safe}">Download</button>
                                     <button class="moveBtn" data-file="${safe}">Move</button>
+                                    <button class="copyBtn" data-file="${safe}">Copy</button>
                                     <button class="renameBtn" data-file="${safe}">Rename</button>
                                     ${corruptedButtonHtml(file, !!item.Corrupted)}
                                     <button class="deleteBtn" data-file="${safe}">Delete</button>
@@ -347,6 +368,22 @@
             $('#includeSubs').prop('checked', includeSubs).on('change', function () {
                 includeSubs = this.checked;
                 try { localStorage.setItem(SUBS_KEY, includeSubs ? '1' : '0'); } catch (e) { }
+                loadImages(true);
+            });
+
+            // Tag filter choices (a remembered tag that's since been deleted just falls back to all files)
+            T.loadTags().then(tags => {
+                $('#tagFilter').append(tags.map(t =>
+                    `<option value="${t.TagId}">${T.escapeHtml(t.Name)} (${t.FileCount})</option>`).join(''));
+                if (tagFilter && !tags.some(t => String(t.TagId) === tagFilter)) {
+                    tagFilter = '';
+                    loadImages(true);
+                }
+                $('#tagFilter').val(tagFilter);
+            });
+            $('#tagFilter').on('change', function () {
+                tagFilter = $(this).val();
+                try { sessionStorage.setItem(TAG_KEY, tagFilter); } catch (e) { }
                 loadImages(true);
             });
 
@@ -416,6 +453,12 @@
             T.move(itemFolder($item), itemFile($item)).then(() => removeItem($item));
         });
 
+        // The copy shows up here after a Refresh if it went into this folder
+        $(document).on("click", ".copyBtn", function () {
+            const $item = itemOf($(this));
+            T.copy(itemFolder($item), itemFile($item)).catch(() => { });
+        });
+
         $(document).on("click", ".renameBtn", function () {
             const $item = itemOf($(this));
             const oldName = itemFile($item);
@@ -472,8 +515,40 @@
             selected.forEach(size => total += size);
             $('#selCount').text(selected.size + ' selected' + (selected.size ? ' · ' + formatSize(total) : ''));
             $('#selDownloadBtn').prop('disabled', selected.size === 0);
+            $('#selTagBtn').prop('disabled', selected.size === 0);
             $('#selFixSeekingBtn').prop('disabled', fixableSelected().length === 0);
         }
+
+        // Tag: puts one tag (typed; a new name makes a new tag) on every selected file
+        $('#selTagBtn').on('click', function () {
+            const keys = Array.from(selected.keys());
+            if (!keys.length) return;
+            const name = (prompt(`Tag ${keys.length} file${keys.length === 1 ? '' : 's'} with (an existing tag or a new one):`) || '').trim();
+            if (!name) return;
+
+            const files = keys.map(k => {
+                const slash = k.lastIndexOf('/');
+                return { key: k, folder: slash < 0 ? folder : folder + '/' + k.slice(0, slash), file: k.slice(slash + 1) };
+            });
+            const $btn = T.busy($(this), 'Tagging...');
+            T.addTag(name, files).then(res => {
+                T.idle($btn);
+                // Show the tag on the tiles on screen
+                files.forEach(f => {
+                    const $item = $('#imageContainer .media-item').filter((i, el) => el.getAttribute('data-key') === f.key);
+                    if (!$item.length) return;
+                    let $list = $item.find('.tag-list');
+                    if (!$list.length) $list = $('<div class="tag-list"></div>').insertAfter($item.find('.media-body'));
+                    const has = $list.find('.tag-chip').toArray().some(c => c.textContent.toLowerCase() === res.tag.Name.toLowerCase());
+                    if (!has) $list.append(`<span class="tag-chip">${T.escapeHtml(res.tag.Name)}</span>`);
+                });
+                T.showToast(`Tagged ${res.tagged} file${res.tagged === 1 ? '' : 's'} "${res.tag.Name}"`);
+                if (res.missing && res.missing.length) alert("These weren't there any more, so they weren't tagged:\n\n" + res.missing.join('\n'));
+                // A new tag shows up in the filter
+                if (!$('#tagFilter option').filter((i, o) => o.value === String(res.tag.TagId)).length)
+                    $('#tagFilter').append(`<option value="${res.tag.TagId}">${T.escapeHtml(res.tag.Name)}</option>`);
+            }, () => T.idle($btn));
+        });
 
         function fixableSelected() { return Array.from(selected.keys()).filter(T.canFixSeeking); }
 

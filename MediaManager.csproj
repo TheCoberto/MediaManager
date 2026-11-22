@@ -157,11 +157,13 @@
     <Compile Include="Models\MediaKind.cs" />
     <Compile Include="Models\ChunkedUpload.cs" />
     <Compile Include="Models\PlayableCopy.cs" />
+    <Compile Include="Models\Tags.cs" />
     <Compile Include="Models\VideoIndex.cs" />
     <Compile Include="Models\ZipDownload.cs" />
     <Compile Include="Models\GalleryOrder.cs" />
     <Compile Include="Controllers\BulkDownloadController.cs" />
     <Compile Include="Controllers\PlayableController.cs" />
+    <Compile Include="Controllers\TagsController.cs" />
     <Compile Include="Controllers\ThumbnailsController.cs" />
     <Compile Include="Models\RecycleBin.cs" />
     <Compile Include="Models\NaturalStringComparer.cs" />
@@ -227,6 +229,7 @@
     <Content Include="Views\Duplicates\Index.cshtml" />
     <Content Include="Views\EmptyFolders\Index.cshtml" />
     <Content Include="Views\Media\Flagged.cshtml" />
+    <Content Include="Views\Tags\Index.cshtml" />
     <Content Include="Views\Shared\_MediaTools.cshtml" />
     <Content Include="Views\Favorites\Index.cshtml" />
     <Content Include="Views\RecycleBin\Index.cshtml" />

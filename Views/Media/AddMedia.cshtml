@@ -80,6 +80,7 @@
         (function () {
             const Q = window.UploadQueue;
             const uploadUrl = '@Url.Action("AddMediaChunk", "Media")';
+            const cancelUrl = '@Url.Action("CancelUpload", "Media")';
             const maxBytes = @MediaManager.Models.SiteSettings.MaxUploadBytes; // MaxUploadMB in Site.config
             const foldersUrl = '@Url.Action("GetFolders", "Media")';
             const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
@@ -92,7 +93,7 @@
             const clearDoneBtn = document.getElementById('clearDoneBtn');
             const summary = document.getElementById('summary');
 
-            let items = [];          // { file, el, status: 'pending' | 'uploading' | 'done' | 'failed', thumbUrl }
+            let items = [];          // { file, el, status: 'pending' | 'uploading' | 'done' | 'failed', thumbUrl, control, finishing }
             let uploading = false;
 
             // Folder suggestions (the box still accepts a brand-new folder)
@@ -141,10 +142,10 @@
                     row.append(thumb, main, remove);
                     queueEl.appendChild(row);
 
-                    const item = { file, el: row, status: 'pending', thumbUrl };
+                    const item = { file, el: row, status: 'pending', thumbUrl, control: null, finishing: false };
                     remove.addEventListener('click', () => {
-                        if (item.status === 'uploading') return;
-                        removeItem(item);
+                        if (item.status === 'uploading') cancelUpload(item);
+                        else removeItem(item);
                     });
                     items.push(item);
 
@@ -163,6 +164,16 @@
                 refresh();
             }
 
+            // Stops the file being uploaded and takes it off the list; uploadAll carries on with the next one.
+            // Not once it's "finishing": every piece has arrived and the server is saving it.
+            function cancelUpload(item) {
+                if (item.finishing || !item.control) return;
+                if (!confirm('Cancel uploading "' + item.file.name + '"?')) return;
+                if (item.finishing || item.status !== 'uploading') // it got that far while the question was open
+                    return alert('Too late: "' + item.file.name + '" has finished uploading.');
+                Q.cancel(item.control);
+            }
+
             function setStatus(item, status, message) {
                 item.status = status;
                 item.el.classList.remove('done', 'failed');
@@ -171,7 +182,17 @@
                 item.el.querySelector('.am-meta').textContent = Q.formatSize(item.file.size) + (message ? ' · ' + message : '');
                 item.el.querySelector('.am-bar').style.display = status === 'uploading' ? 'block' : 'none';
                 item.el.querySelector('.am-name').disabled = status === 'uploading' || status === 'done';
-                item.el.querySelector('.am-remove').disabled = status === 'uploading';
+                setRemoveButton(item);
+            }
+
+            // ✕ removes a waiting / finished file from the list, and cancels the one being uploaded
+            function setRemoveButton(item) {
+                const btn = item.el.querySelector('.am-remove');
+                const uploadingNow = item.status === 'uploading';
+                btn.disabled = uploadingNow && item.finishing;
+                btn.title = !uploadingNow ? 'Remove from the list'
+                    : item.finishing ? 'Almost done: the server is saving it'
+                    : 'Cancel this upload';
             }
 
             function refresh() {
@@ -218,6 +239,8 @@
                     const problem = checkName(name);
                     if (problem) { setStatus(item, 'failed', problem); refresh(); continue; }
 
+                    item.control = Q.newControl();
+                    item.finishing = false;
                     setStatus(item, 'uploading', 'uploading 0%');
                     const fill = item.el.querySelector('.am-bar > div');
                     fill.style.width = '0%';
@@ -225,9 +248,22 @@
                     const result = await Q.sendChunked(uploadUrl, token, { newFileName: name, folder }, item.file, pct => {
                         fill.style.width = pct + '%';
                         // 99%: all sent, the server is saving it (videos may get an index added: Models/VideoIndex.cs)
+                        if (pct >= 99 && !item.finishing) { item.finishing = true; setRemoveButton(item); }
                         item.el.querySelector('.am-meta').textContent = Q.formatSize(item.file.size) +
                             (pct >= 99 ? ' · finishing...' : ' · uploading ' + pct + '%');
-                    });
+                    }, undefined, item.control);
+
+                    if (result.cancelled) {
+                        // Throw away the pieces the server has so far (it'd clear them in a day anyway), drop the row, carry on
+                        const form = new FormData();
+                        form.append('__RequestVerificationToken', token);
+                        form.append('uploadId', item.control.uploadId);
+                        fetch(cancelUrl, { method: 'POST', body: form, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                            .catch(() => { });
+                        item.status = 'cancelled';
+                        removeItem(item);
+                        continue;
+                    }
 
                     if (result.ok && result.data && result.data.fileName) nameInput.value = result.data.fileName;
                     setStatus(item, result.ok ? 'done' : 'failed', result.ok ? (result.message || 'Uploaded') : result.message);
