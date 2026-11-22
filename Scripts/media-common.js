@@ -509,6 +509,7 @@
             var el = this;
             el.innerHTML = mediaHtml(el.getAttribute("data-src"), el.getAttribute("data-file"), {
                 thumb: el.getAttribute("data-thumb"),
+                fallback: el.getAttribute("data-fallback"),
                 folder: el.getAttribute("data-folder"),
                 id: el.getAttribute("data-id"),
                 autoplay: el.getAttribute("data-autoplay") === "true",
@@ -517,9 +518,31 @@
                 sizeAttrs: el.getAttribute("data-size-attrs")
             });
             el.removeAttribute("data-src");
+            useFallbackIfBroken(el, el.getAttribute("data-fallback"));
         });
         loadTextPreviews(root);
         setUpPlayableCopies(root);
+    }
+
+    // A picture the browser can't show (often not really the format its name says, e.g. a TIFF called ".jpg"):
+    // show the JPEG the server made of it instead, and say so.
+    function useFallbackIfBroken(container, fallback) {
+        if (!fallback) return;
+        var img = $(container).find("img").get(0);
+        if (!img) return;
+
+        function swap() {
+            if (img.getAttribute("data-fell-back")) return;
+            img.setAttribute("data-fell-back", "1");
+            img.src = fallback;
+            $('<div class="doc-note"></div>')
+                .text("Your browser can't show this file's own format, so this is a copy the site converted to JPEG. "
+                    + "Download it to get the original.")
+                .insertAfter(img);
+        }
+
+        if (img.complete && img.naturalWidth === 0 && img.getAttribute("src")) swap(); // already failed
+        else img.addEventListener("error", swap);
     }
 
     // Playable-copy cards (AVI on the View page): start the copy if needed, show progress, then swap in the player.

@@ -55,6 +55,7 @@
 
 @* Filled in by media-common.js: picture, video / audio player, PDF viewer, text, or a document card *@
 <div class="media-player" style="text-align:center;" data-src="@path" data-file="@file" data-folder="@folder" data-id="mediaElement"
+     data-fallback="@ViewBag.Fallback"
      data-autoplay="@((isVideo || isAudio) ? "true" : "false")" data-max-height="80vh"></div>
 
 <div class="media-actions" style="text-align:center; margin-top:12px;">
@@ -102,6 +103,20 @@
         <tr><th style="width:150px;">Name</th><td style="word-break:break-all;">@Model.FileName</td></tr>
         <tr><th>Folder</th><td style="word-break:break-all;">@if (hasFolder) { @Html.ActionLink(folder, "Gallery", "Media", new { folder }, null) } else { <text>(top folder)</text> }</td></tr>
         <tr><th>Type</th><td>@Model.FileType (@Model.FileExtension.ToLowerInvariant())</td></tr>
+        @if (ViewBag.RealFormat != null)
+        {
+            var real = (MediaManager.Models.FileFormat.Info)ViewBag.RealFormat;
+            <tr>
+                <th>Actual format</th>
+                <td>
+                    <strong>@real.Name</strong>, though it's named @Model.FileExtension.ToLowerInvariant()
+                    @if (!real.BrowsersShow)
+                    {
+                        <br /><small style="opacity:.8;">Browsers can't show @real.Name, so the picture above is a copy the site converted to JPEG. The file itself is unchanged.</small>
+                    }
+                </td>
+            </tr>
+        }
         <tr><th>Size</th><td>@Model.FileSizeFormatted <span style="opacity:.7;">(@Model.FileSize.ToString("N0") bytes)</span></td></tr>
         <tr id="dimensionsRow" style="display:none;"><th>@(isVideo ? "Resolution" : "Dimensions")</th><td id="dimensions"></td></tr>
         @if (isVideo || isAudio)

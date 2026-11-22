@@ -148,6 +148,7 @@
     <Compile Include="Models\ActivityLog.cs" />
     <Compile Include="Models\DuplicateFinder.cs" />
     <Compile Include="Models\EmptyFolders.cs" />
+    <Compile Include="Models\FileFormat.cs" />
     <Compile Include="Models\FileViewModel.cs" />
     <Compile Include="Models\HiddenFolders.cs" />
     <Compile Include="Models\LibraryIndex.cs" />
