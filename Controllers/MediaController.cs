@@ -634,6 +634,55 @@ namespace MediaManager.Controllers
             }
         }
 
+        /// <summary>
+        /// Empty Folders page: deletes folders that are still empty (nothing below them but other empty folders and
+        /// clutter like Thumbs.db; see Models/EmptyFolders.cs). Checked again here, so a folder that got a file since
+        /// the scan is left alone. Nothing of value is in them, so they're deleted outright, not recycled.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        /// <param name="folders">One folder per line (relative to the media root).</param>
+        public JsonResult DeleteEmptyFolders(string folders)
+        {
+            var deleted = new List<string>();
+            var skipped = new List<string>();
+            foreach (string folder in (folders ?? "").Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string path = ResolveDeletableFolder(folder, out string error);
+                if (path == null)
+                {
+                    skipped.Add(folder + ": " + error);
+                    continue;
+                }
+                if (!EmptyFolders.IsEmpty(path))
+                {
+                    skipped.Add(folder + ": it isn't empty any more");
+                    continue;
+                }
+                try
+                {
+                    Directory.Delete(path, true); // only empty folders and clutter files inside
+                    deleted.Add(MediaPaths.NormalizeFolder(folder));
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    skipped.Add(folder + ": " + ex.Message);
+                }
+            }
+
+            if (deleted.Count > 0)
+            {
+                InvalidateAllMediaCaches();
+                ActivityLog.Write(ActivityLog.Delete, "Deleted " + deleted.Count + " empty folder" + (deleted.Count == 1 ? "" : "s") + ": "
+                    + string.Join(", ", deleted.Take(20)) + (deleted.Count > 20 ? ", ..." : "") + ".");
+            }
+            if (skipped.Count > 0)
+                ActivityLog.Error(ActivityLog.Delete, "Left " + skipped.Count + " folder" + (skipped.Count == 1 ? "" : "s") + " alone: "
+                    + string.Join("; ", skipped.Take(10)) + (skipped.Count > 10 ? "; ..." : "") + ".");
+
+            return Json(new { success = true, deleted, skipped });
+        }
+
         /// <summary>Forget every cached folder listing (after a whole folder tree changes).</summary>
         private static void InvalidateAllMediaCaches()
         {

@@ -130,6 +130,7 @@
     <Compile Include="Controllers\MediaController.cs" />
     <Compile Include="Controllers\ActivityController.cs" />
     <Compile Include="Controllers\DuplicatesController.cs" />
+    <Compile Include="Controllers\EmptyFoldersController.cs" />
     <Compile Include="Controllers\FavoritesController.cs" />
     <Compile Include="Controllers\RecycleBinController.cs" />
     <Compile Include="Controllers\DownloadersController.cs" />
@@ -145,6 +146,7 @@
     <Compile Include="Models\DapperORM.cs" />
     <Compile Include="Models\ActivityLog.cs" />
     <Compile Include="Models\DuplicateFinder.cs" />
+    <Compile Include="Models\EmptyFolders.cs" />
     <Compile Include="Models\FileViewModel.cs" />
     <Compile Include="Models\HiddenFolders.cs" />
     <Compile Include="Models\MediaPaths.cs" />
@@ -223,6 +225,7 @@
     <Content Include="Scripts\upload-queue.js" />
     <Content Include="Views\Activity\Index.cshtml" />
     <Content Include="Views\Duplicates\Index.cshtml" />
+    <Content Include="Views\EmptyFolders\Index.cshtml" />
     <Content Include="Views\Media\Flagged.cshtml" />
     <Content Include="Views\Shared\_MediaTools.cshtml" />
     <Content Include="Views\Favorites\Index.cshtml" />
