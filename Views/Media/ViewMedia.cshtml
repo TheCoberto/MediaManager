@@ -43,7 +43,7 @@
 </div>
 
 @* Filled in by media-common.js: picture, video / audio player, PDF viewer, text, or a document card *@
-<div class="media-player" style="text-align:center;" data-src="@path" data-file="@file" data-id="mediaElement"
+<div class="media-player" style="text-align:center;" data-src="@path" data-file="@file" data-folder="@folder" data-id="mediaElement"
      data-autoplay="@((isVideo || isAudio) ? "true" : "false")" data-max-height="80vh"></div>
 
 <div class="media-actions" style="text-align:center; margin-top:12px;">
@@ -162,9 +162,6 @@
             });
 
             // Dimensions / video length come from the browser once the file has loaded
-            const el = document.getElementById('mediaElement');
-            if (!el) return;
-
             function showDimensions(w, h) {
                 if (!w || !h) return;
                 document.getElementById('dimensions').textContent = w + ' × ' + h + ' px';
@@ -177,19 +174,26 @@
                 return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
             }
 
-            if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') {
-                const onMeta = () => {
-                    if (el.tagName === 'VIDEO') showDimensions(el.videoWidth, el.videoHeight);
-                    if (isFinite(el.duration)) {
-                        document.getElementById('duration').textContent = formatDuration(el.duration);
-                        document.getElementById('durationRow').style.display = '';
-                    }
-                };
-                if (el.readyState >= 1) onMeta(); else el.addEventListener('loadedmetadata', onMeta);
-            } else if (el.tagName === 'IMG') {
-                if (el.complete) showDimensions(el.naturalWidth, el.naturalHeight);
-                else el.addEventListener('load', () => showDimensions(el.naturalWidth, el.naturalHeight));
+            function readDetails() {
+                const el = document.getElementById('mediaElement');
+                if (!el) return;
+                if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') {
+                    const onMeta = () => {
+                        if (el.tagName === 'VIDEO') showDimensions(el.videoWidth, el.videoHeight);
+                        if (isFinite(el.duration)) {
+                            document.getElementById('duration').textContent = formatDuration(el.duration);
+                            document.getElementById('durationRow').style.display = '';
+                        }
+                    };
+                    if (el.readyState >= 1) onMeta(); else el.addEventListener('loadedmetadata', onMeta);
+                } else if (el.tagName === 'IMG') {
+                    if (el.complete) showDimensions(el.naturalWidth, el.naturalHeight);
+                    else el.addEventListener('load', () => showDimensions(el.naturalWidth, el.naturalHeight));
+                }
             }
+
+            readDetails();
+            document.addEventListener('mediatools:playerready', readDetails); // an AVI's playable copy took its place
         })();
     </script>
 }

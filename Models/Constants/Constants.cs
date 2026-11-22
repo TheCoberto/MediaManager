@@ -39,10 +39,11 @@ namespace MediaManager.Models.Constants
             "Gamevault",
 
             // The site's Recycle Bin (Models/RecycleBin.cs), uploads in progress (Models/ChunkedUpload.cs)
-            // and thumbnails (Models/Thumbnails.cs)
+            // thumbnails (Models/Thumbnails.cs) and playable copies of AVI videos (Models/PlayableCopy.cs)
             ".recycle",
             ".uploads",
             ".thumbs",
+            ".playable",
 
             // Tool / app-generated folders
             ".thumb.stogram",   // 4K Stogram's thumbnail cache (the "4K Stogram" folder itself is shown)

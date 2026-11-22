@@ -253,7 +253,7 @@ namespace MediaManager.Models
         }
 
         /// <summary>Lengths within 1 second or 2% of each other, whichever is more.</summary>
-        private static bool Close(double seconds, double expected) => Math.Abs(seconds - expected) <= Math.Max(1.0, expected * 0.02);
+        internal static bool Close(double seconds, double expected) => Math.Abs(seconds - expected) <= Math.Max(1.0, expected * 0.02);
 
         private static string Describe(double seconds)
         {
@@ -264,7 +264,7 @@ namespace MediaManager.Models
         }
 
         /// <summary>The length ffprobe reads, in seconds, or null if it reads none (e.g. a WebM without one).</summary>
-        private static async Task<double?> ProbeLengthAsync(string path)
+        internal static async Task<double?> ProbeLengthAsync(string path)
         {
             var result = await RunToolAsync(SiteSettings.FfprobePath,
                 $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{path}\"").ConfigureAwait(false);
@@ -360,13 +360,13 @@ namespace MediaManager.Models
 
         // ---------- running ffmpeg / ffprobe ----------
 
-        private class ToolResult
+        internal class ToolResult
         {
             public string Error;  // null if it worked
             public string Output; // what it printed (ffprobe's answer)
         }
 
-        private static async Task<ToolResult> RunToolAsync(string exe, string args)
+        internal static async Task<ToolResult> RunToolAsync(string exe, string args)
         {
             string name = Path.GetFileNameWithoutExtension(exe);
             var psi = new ProcessStartInfo

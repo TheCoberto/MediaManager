@@ -287,6 +287,13 @@
         return null;
     }
 
+    // Videos browsers can't play (AVI): the server makes an MP4 copy to play instead (Models/PlayableCopy.cs)
+    var PLAYABLE = window.MEDIA_PLAYABLE || [];
+    function needsCopy(file) {
+        var m = /\.[^.\/\\]+$/.exec(file || "");
+        return !!m && PLAYABLE.indexOf(m[0].toLowerCase()) >= 0;
+    }
+
     function isPdf(file) { return /\.pdf$/i.test(file || ""); }
     function isText(file) { return /\.(txt|md)$/i.test(file || ""); }
     function extLabel(file) { var m = /\.([^.]+)$/.exec(file || ""); return m ? m[1].toUpperCase() : "File"; }
@@ -309,6 +316,7 @@
      * opts.sizeAttrs  extra attributes for images / videos, e.g. 'width="500" height="400"'
      * opts.thumb      thumbnail URL (lists): shown instead of a big picture, and as a video's poster so
      *                 nothing of the video downloads until you press play
+     * opts.folder     the file's folder: lets an AVI get its playable copy (setUpPlayableCopies)
      */
     function mediaHtml(url, file, opts) {
         opts = opts || {};
@@ -318,6 +326,23 @@
         var auto = opts.autoplay ? " autoplay" : "";
         var size = opts.sizeAttrs ? " " + opts.sizeAttrs : "";
         var thumb = opts.thumb ? escapeHtml(opts.thumb) : "";
+
+        if (kindOf(file) === "video" && needsCopy(file)) {
+            // Lists: its picture (tapping it opens the View page, which plays it). View: a card until the copy is ready.
+            if (opts.compact) {
+                return (thumb
+                    ? '<img' + size + ' src="' + thumb + '" loading="lazy" alt="" style="max-width:100%; max-height:' + maxH + ';">'
+                    : '<div class="doc-card"><div class="kind-icon">&#127916;</div><div>' + escapeHtml(extLabel(file)) + ' video</div></div>')
+                    + '<div class="doc-note">' + escapeHtml(extLabel(file)) + ': open it to play it</div>';
+            }
+            if (!opts.folder && opts.folder !== "")
+                return '<div' + id + ' class="doc-card"><div class="kind-icon">&#127916;</div><div>Browsers can\'t play '
+                    + escapeHtml(extLabel(file)) + ' videos.<br><small>Download it to watch it.</small></div></div>';
+            return '<div class="doc-card playable-card" data-folder="' + escapeHtml(opts.folder) + '" data-file="' + escapeHtml(file) + '"'
+                + ' data-id="' + escapeHtml(opts.id || "") + '" data-autoplay="' + (opts.autoplay ? "true" : "false") + '"'
+                + ' data-max-height="' + escapeHtml(maxH) + '" data-size-attrs="' + escapeHtml(opts.sizeAttrs || "") + '">'
+                + '<div class="kind-icon">&#127916;</div><div class="playable-text">Getting this video ready to play...</div></div>';
+        }
 
         switch (kindOf(file)) {
             case "video":
@@ -380,6 +405,7 @@
             var el = this;
             el.innerHTML = mediaHtml(el.getAttribute("data-src"), el.getAttribute("data-file"), {
                 thumb: el.getAttribute("data-thumb"),
+                folder: el.getAttribute("data-folder"),
                 id: el.getAttribute("data-id"),
                 autoplay: el.getAttribute("data-autoplay") === "true",
                 compact: el.getAttribute("data-compact") === "true",
@@ -389,6 +415,76 @@
             el.removeAttribute("data-src");
         });
         loadTextPreviews(root);
+        setUpPlayableCopies(root);
+    }
+
+    // Playable-copy cards (AVI on the View page): start the copy if needed, show progress, then swap in the player.
+    // Fires "mediatools:playerready" on document once the player is in, for pages that read its size / length.
+    function setUpPlayableCopies(root) {
+        $(root || document).find(".playable-card[data-file]").each(function () {
+            var card = this;
+            var folder = card.getAttribute("data-folder");
+            var file = card.getAttribute("data-file");
+            var opts = {
+                id: card.getAttribute("data-id"),
+                autoplay: card.getAttribute("data-autoplay") === "true",
+                maxHeight: card.getAttribute("data-max-height"),
+                sizeAttrs: card.getAttribute("data-size-attrs")
+            };
+            card.removeAttribute("data-file");
+            var $text = $(card).find(".playable-text");
+
+            function say(html) { $text.html(html); }
+
+            function retryButton() {
+                $('<button type="button" class="btn btn-default btn-sm" style="margin-top:8px;">Try again</button>')
+                    .appendTo($text)
+                    .on("click", function () {
+                        say("Starting again...");
+                        post(URLS.playableStart, { folder: folder, file: file, retry: true }).then(show, function () { show({ state: "failed", message: "Couldn't start." }); });
+                    });
+            }
+
+            function show(s) {
+                if (!document.body.contains(card)) return; // the page moved on
+                switch (s.state) {
+                    case "ready":
+                        $(card).replaceWith(mediaHtml(s.url, "copy.mp4", opts));
+                        document.dispatchEvent(new CustomEvent("mediatools:playerready"));
+                        return;
+                    case "failed":
+                        say("Couldn't make a copy of this video that browsers can play:<br><small>" + escapeHtml(s.message || "") + "</small><br>");
+                        retryButton();
+                        return;
+                    case "none":
+                        say("Getting this video ready to play...");
+                        post(URLS.playableStart, { folder: folder, file: file }).then(show, function () { show({ state: "failed", message: "Couldn't start." }); });
+                        return;
+                    case "waiting":
+                        say("Waiting for another video to finish converting...");
+                        break;
+                    default: // working
+                        say("Browsers can't play " + escapeHtml(extLabel(file)) + " videos, so the site is making a copy they can. "
+                            + "This only happens once.<br><b>" + (s.percent || 0) + "%</b>");
+                }
+                setTimeout(poll, 1500);
+            }
+
+            function poll() {
+                $.getJSON(URLS.playableStatus, { folder: folder, file: file, v: Date.now() })
+                    .done(function (s) {
+                        if (s && s.success) return show(s);
+                        say("Couldn't check on the copy: " + escapeHtml((s && s.message) || "no answer") + "<br>");
+                        retryButton();
+                    })
+                    .fail(function (xhr) {
+                        if (xhr.status === 401) { showLoginExpired(); return say("Your login has expired."); }
+                        setTimeout(poll, 5000); // the site may be restarting: keep checking
+                    });
+            }
+
+            poll();
+        });
     }
 
     function download(url, file) {

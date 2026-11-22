@@ -66,6 +66,8 @@
     <button id="refreshGalleryBtn">Refresh Gallery</button>
     <button id="selectModeBtn" title="Tick files to download several at once">&#9745; Select</button>
     <button id="downloadFolderBtn" title="Download everything in this folder as one ZIP">&#11015; Download folder</button>
+    <button type="button" title="Find files in this folder (and its subfolders) that are exact copies of each other"
+            onclick="location.href='@Url.Action("Index", "Duplicates", new { folder = ViewBag.Folder })'">&#128203; Find duplicates</button>
     <button id="deleteFolderBtn"
             title="Delete this folder: empty folders are removed, anything else goes to the Recycle Bin">&#128465; Delete folder</button>
 </div>
