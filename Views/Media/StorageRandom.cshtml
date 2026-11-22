@@ -70,6 +70,7 @@ else
                 @Html.Raw(isFavorite ? "&#9733; Favorite" : "&#9734; Favorite")
             </button>
             <button id="moveBtn">Move</button>
+        <button id="copyBtn">Copy</button>
             <button id="renameBtn">Rename</button>
             if (isCorrupted)
             {
@@ -176,6 +177,7 @@ else
 
             // After Move / Delete the file is gone from here, so carry on to the next random one
             $('#moveBtn').on('click', () => T.move(folder, file).then(goNext));
+            $('#copyBtn').on('click', () => T.copy(folder, file));
             $('#deleteBtn').on('click', () => T.remove(folder, file).then(goNext));
 
             // After Rename, stay on the same file under its new name

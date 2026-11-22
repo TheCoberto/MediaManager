@@ -151,7 +151,7 @@
         var typed = normalizeFolder($("#moveInput").val());
         var q = typed.toLowerCase();
         var list = (allFolders || []).filter(function (f) {
-            return f !== currentFolder && (!q || f.toLowerCase().indexOf(q) >= 0);
+            return (currentFolder == null || f !== currentFolder) && (!q || f.toLowerCase().indexOf(q) >= 0);
         });
 
         $("#moveFolderList").html(
@@ -169,8 +169,24 @@
         );
     }
 
+    // Moves a file to another folder. Resolves with the new folder.
     function move(folder, file) {
+        return sendToFolder("move", folder, file).then(function (res) { return res.folder; });
+    }
+
+    // Copies a file to a folder (its own folder too: the copy gets a free name like "cat (2).jpg").
+    // Resolves with { folder, name } of the copy.
+    function copy(folder, file) {
+        return sendToFolder("copy", folder, file);
+    }
+
+    // The Move / Copy dialog: pick or type a folder, then send the file there. Never overwrites: on a name clash
+    // it offers to keep both under a free name.
+    function sendToFolder(action, folder, file) {
+        var isCopy = action === "copy";
         return new Promise(function (resolve) {
+            $("#moveTitle").text(isCopy ? "Copy File" : "Move File");
+            $("#moveConfirmBtn").text(isCopy ? "Copy" : "Move");
             $("#moveFileName").text(file);
             $("#moveInput").val("");
             $("#moveFolderList").html('<div style="padding:6px 8px; opacity:.7;">Loading folders...</div>');
@@ -178,7 +194,8 @@
             $("#moveModal").show();
             $("#moveInput").focus();
 
-            var render = function () { renderFolderList(folder); };
+            // A copy can go in the file's own folder; a move can't
+            var render = function () { renderFolderList(isCopy ? null : folder); };
             loadFolders().then(render, function () { $("#moveHint").text("Couldn't load folders. You can still type a path."); });
 
             $("#moveInput").off("input.mt").on("input.mt", render);
@@ -195,24 +212,31 @@
             $("#moveConfirmBtn").off("click.mt").on("click.mt", function () {
                 var newFolder = normalizeFolder($("#moveInput").val());
                 if (!newFolder) return alert("Pick or type a folder");
+                var $btn = $(this);
 
                 function send(keepBoth) {
-                    post(URLS.move, { folder: folder, file: file, newFolder: newFolder, keepBoth: keepBoth },
+                    // Copying a big video takes a while
+                    if (isCopy) busy($btn, "Copying...");
+                    post(isCopy ? URLS.copy : URLS.move, { folder: folder, file: file, newFolder: newFolder, keepBoth: keepBoth },
                         function (res) { return !!res.conflict; } // a name clash is handled below, not with an alert
                     ).then(function (res) {
+                        idle($btn);
                         $("#moveModal").hide();
-                        showToast(res.newName && res.newName !== file
-                            ? "Moved to " + newFolder + " as " + res.newName
-                            : "File moved to " + newFolder);
+                        var name = res.newName || file;
+                        showToast(isCopy
+                            ? "Copied to " + newFolder + (name !== file ? " as " + name : "")
+                            : name !== file ? "Moved to " + newFolder + " as " + name : "File moved to " + newFolder);
                         // A newly created folder shows up in the picker next time
                         if (allFolders && !allFolders.some(function (f) { return f.toLowerCase() === newFolder.toLowerCase(); }))
                             allFolders.push(newFolder);
-                        resolve(newFolder);
+                        resolve({ folder: newFolder, name: name });
                     }, function (err) {
+                        idle($btn);
                         var res = err && err.response;
                         if (!res || !res.conflict) return;
-                        // Never overwrite: offer to keep both, the moved one under a free name
-                        if (confirm(res.message + "\n\nMove it anyway and keep both? This one will be named \"" + res.suggestedName + "\"."))
+                        // Never overwrite: offer to keep both, the new one under a free name
+                        if (confirm(res.message + "\n\n" + (isCopy ? "Copy" : "Move") + " it anyway and keep both? "
+                            + (isCopy ? "The copy" : "This one") + " will be named \"" + res.suggestedName + "\"."))
                             send(true);
                     });
                 }
@@ -273,6 +297,73 @@
             showToast(favorite ? "Added to Favorites" : "Removed from Favorites");
             return favorite;
         });
+    }
+
+    // ---------- tags (Models/Tags.cs) ----------
+
+    // Every tag with its file count: [{ TagId, Name, FileCount }]
+    function loadTags() {
+        return $.getJSON(URLS.tagsList, { v: Date.now() }).then(function (list) { return list || []; });
+    }
+
+    // Puts a tag (by name; a new name makes a new tag) on files: [{ folder, file }]. Resolves with the server's answer.
+    function addTag(name, files) {
+        return post(URLS.tagsAdd, {
+            name: name,
+            files: files.map(function (f) { return normalizeFolder(f.folder) + "|" + f.file; }).join("\n")
+        });
+    }
+
+    /**
+     * The Tags row on a file's page: its tags as chips (x takes one off, the name opens the Tags page for it) and a
+     * box to add one, suggesting existing tags. container: an empty element.
+     */
+    function tagEditor(container, folder, file) {
+        var $c = $(container).addClass("tag-editor");
+        var listId = "tagSuggest" + Math.floor(Math.random() * 1e9);
+        $c.html('<span class="tag-chips"></span>'
+            + '<input type="text" class="tag-input" list="' + listId + '" placeholder="Add a tag..." maxlength="100" autocomplete="off">'
+            + '<datalist id="' + listId + '"></datalist>'
+            + '<button type="button" class="tag-add-btn">Add</button>');
+        var $chips = $c.find(".tag-chips"), $input = $c.find(".tag-input"), $list = $c.find("datalist");
+
+        function suggest() {
+            loadTags().then(function (all) {
+                $list.html(all.map(function (t) { return '<option value="' + escapeHtml(t.Name) + '">'; }).join(""));
+            });
+        }
+
+        function render() {
+            $.getJSON(URLS.tagsForFile, { folder: folder, file: file, v: Date.now() }).done(function (res) {
+                var tags = (res && res.tags) || [];
+                $chips.html(tags.length ? tags.map(function (t) {
+                    return '<span class="tag-chip" data-id="' + t.TagId + '">'
+                        + '<a href="' + escapeHtml(URLS.tagsPage + "?tags=" + t.TagId) + '" title="Everything tagged ' + escapeHtml(t.Name) + '">'
+                        + escapeHtml(t.Name) + '</a>'
+                        + '<button type="button" class="tag-x" title="Take this tag off">&times;</button></span>';
+                }).join("") : '<span class="tag-none">No tags</span>');
+            });
+        }
+
+        function add() {
+            var name = $input.val().trim();
+            if (!name) return;
+            addTag(name, [{ folder: folder, file: file }]).then(function () {
+                $input.val("");
+                render();
+                suggest();
+            }, function () { });
+        }
+
+        $c.on("click", ".tag-add-btn", add);
+        $input.on("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); add(); } });
+        $c.on("click", ".tag-x", function () {
+            var id = $(this).closest(".tag-chip").attr("data-id");
+            post(URLS.tagsRemove, { id: id, folder: folder, file: file }).then(render, function () { });
+        });
+
+        render();
+        suggest();
     }
 
     // ---------- showing any kind of file ----------
@@ -637,6 +728,10 @@
         idle: idle,
         rename: rename,
         move: move,
+        copy: copy,
+        loadTags: loadTags,
+        addTag: addTag,
+        tagEditor: tagEditor,
         remove: remove,
         markCorrupted: markCorrupted,
         unmark: unmark,

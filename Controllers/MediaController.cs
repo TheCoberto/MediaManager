@@ -83,9 +83,10 @@ namespace MediaManager.Controllers
         /// <param name="sort">"random" (shuffled by <paramref name="seed"/>), "name" (A to Z) or "name-desc" (Z to A).</param>
         /// <param name="seed">The page's shuffle number: the same seed always gives the same shuffle.</param>
         /// <param name="subfolders">Also include everything in the folder's subfolders (the "Include subfolders" switch).</param>
+        /// <param name="tag">Only files with this tag (the Gallery's tag filter).</param>
         [OutputCache(NoStore = true, Duration = 0, VaryByParam = "*")]
         public JsonResult GetMedia(string folder, string after = null, int pageSize = 10, string search = "", string sort = "random",
-            int seed = 0, bool subfolders = false)
+            int seed = 0, bool subfolders = false, int? tag = null)
         {
             var empty = Json(new { Files = new List<object>(), TotalCount = 0, HasMore = false }, JsonRequestBehavior.AllowGet);
 
@@ -116,6 +117,15 @@ namespace MediaManager.Controllers
                 ? files
                 : files.Where(f => f.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
 
+            // Apply the tag filter: tagged files are stored as folder + name, so match on the path from the media root
+            if (tag != null)
+            {
+                var tagged = new HashSet<string>(
+                    Tags.FilesWith(new[] { tag.Value }, matchAll: false).Select(t => (t.Folder.Length == 0 ? "" : t.Folder + "/") + t.FileName),
+                    StringComparer.OrdinalIgnoreCase);
+                filtered = filtered.Where(f => tagged.Contains(folder + "/" + f)).ToList();
+            }
+
             int totalCount = filtered.Count;
 
             // A full, stable order; then everything after the last file the page already has. The cursor is
@@ -139,6 +149,8 @@ namespace MediaManager.Controllers
             var corruptedByFolder = byFolder.ToDictionary(g => g.Key, g => Flags.CorruptedIn(g.Key, g.Select(i => i.Name).ToList()),
                 StringComparer.OrdinalIgnoreCase);
             var favoritesByFolder = byFolder.ToDictionary(g => g.Key, g => Favorites.GetFileNamesIn(g.Key), StringComparer.OrdinalIgnoreCase);
+            var tagsByFolder = byFolder.ToDictionary(g => g.Key, g => Tags.NamesIn(g.Key, g.Select(i => i.Name).ToList()),
+                StringComparer.OrdinalIgnoreCase);
 
             var result = items.Select(i =>
             {
@@ -151,6 +163,7 @@ namespace MediaManager.Controllers
                     i.Folder,              // the file's own folder, for its buttons
                     Corrupted = corruptedByFolder[i.Folder].Contains(i.Name),
                     Favorite = favoritesByFolder[i.Folder].Contains(i.Name),
+                    Tags = tagsByFolder[i.Folder].TryGetValue(i.Name, out var names) ? names : new List<string>(),
                     Size = info?.Length ?? 0,                                // for the "N selected · size" bar
                     Thumb = info == null ? null : Thumbnails.UrlFor(Url, i.Folder, i.Name, info) // null: show the file itself
                 };
@@ -248,6 +261,15 @@ namespace MediaManager.Controllers
                 ActivityLog.Error(ActivityLog.Upload, "Couldn't save the upload: " + ex.Message, safeFolder, targetName);
                 return Json(new { success = false, message = "Couldn't save the file: " + ex.Message });
             }
+        }
+
+        /// <summary>Add Media: an upload was cancelled part way. Throws away the pieces received so far.</summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public JsonResult CancelUpload(string uploadId)
+        {
+            ChunkedUpload.Discard(uploadId); // ignores anything that isn't an upload id
+            return Json(new { success = true });
         }
 
         /// <summary>
@@ -401,6 +423,7 @@ namespace MediaManager.Controllers
 
             RecycleBin.Recycle(fullPath, RecycleBin.SourceGallery); // restorable from the Recycle Bin page
             Favorites.Set(folder, file, false);
+            Tags.Forget(folder, file);
             Flags.Forget(folder, file);
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);
@@ -435,6 +458,7 @@ namespace MediaManager.Controllers
 
             RecycleBin.Recycle(fullPath, RecycleBin.SourceGallery); // restorable from the Recycle Bin page
             Favorites.Set(folder, file, false);
+            Tags.Forget(folder, file);
             Flags.Forget(folder, file);
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);
@@ -466,6 +490,7 @@ namespace MediaManager.Controllers
 
             System.IO.File.Move(oldPath, newPath);
             Favorites.Rename(folder, oldName, newName);
+            Tags.Rename(folder, oldName, newName);
             Flags.Move(folder, oldName, folder, newName);
             Thumbnails.Forget(folder, oldName);
             PlayableCopy.Forget(folder, oldName);
@@ -473,6 +498,63 @@ namespace MediaManager.Controllers
             ActivityLog.Write(ActivityLog.Rename, "Renamed from \"" + oldName + "\".", folder, newName);
 
             return Json(new { success = true, newName });
+        }
+
+        /// <summary>
+        /// Copies a file into a folder, which may be its own (the copy then gets a free name). Favorites, flags and
+        /// tags stay with the original. Never overwrites: a name clash works like MoveMedia's (conflict / keepBoth).
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public JsonResult CopyMedia(string folder, string file, string newFolder, bool keepBoth = false)
+        {
+            string sourcePath = MediaPaths.ResolveFile(folder, file);
+            string destinationFolder = MediaPaths.ResolveFolder(newFolder);
+
+            if (sourcePath == null || string.IsNullOrWhiteSpace(newFolder))
+                return Json(new { success = false, message = "Invalid parameters." });
+            if (destinationFolder == null)
+                return Json(new { success = false, message = "Destination folder is invalid." });
+            if (!System.IO.File.Exists(sourcePath))
+                return Json(new { success = false, message = "File not found." });
+
+            string newName = FreeName(destinationFolder, file);
+            if (newName != file && !keepBoth)
+                return Json(new
+                {
+                    success = false,
+                    conflict = true,
+                    suggestedName = newName,
+                    message = "\"" + file + "\" already exists in \"" + MediaPaths.NormalizeFolder(newFolder) + "\"."
+                });
+
+            try
+            {
+                Directory.CreateDirectory(destinationFolder);
+                System.IO.File.Copy(sourcePath, Path.Combine(destinationFolder, newName), overwrite: false);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // e.g. the drive is full; a half-written copy is removed by Windows when File.Copy fails
+                ActivityLog.Error(ActivityLog.Copy, "Couldn't copy to " + MediaPaths.NormalizeFolder(newFolder) + ": " + ex.Message, folder, file);
+                return Json(new { success = false, message = "Couldn't copy the file: " + ex.Message });
+            }
+
+            InvalidateFolderCache(newFolder);
+            ActivityLog.Write(ActivityLog.Copy, "Copied from " + (MediaPaths.NormalizeFolder(folder) is string from && from.Length > 0 ? from : "(top folder)")
+                + "/" + file + ".", newFolder, newName);
+            return Json(new { success = true, newName });
+        }
+
+        /// <summary>The first free "name (n).ext" in a folder (the name itself if nothing's called that).</summary>
+        private static string FreeName(string folderPath, string file)
+        {
+            string name = file;
+            string baseName = Path.GetFileNameWithoutExtension(file);
+            string ext = Path.GetExtension(file);
+            for (int n = 2; System.IO.File.Exists(Path.Combine(folderPath, name)); n++)
+                name = $"{baseName} ({n}){ext}";
+            return name;
         }
 
         [HttpPost]
@@ -518,6 +600,7 @@ namespace MediaManager.Controllers
 
             System.IO.File.Move(oldPath, Path.Combine(destinationFolder, newName));
             Favorites.Move(folder, file, newFolder, newName);
+            Tags.Move(folder, file, newFolder, newName);
             Flags.Move(folder, file, newFolder, newName);
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);

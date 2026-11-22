@@ -52,6 +52,7 @@
                 <ul class="nav navbar-nav">
                     <li>@Html.ActionLink("Add Media", "AddMedia", "Media")</li>
                     <li>@Html.ActionLink("Favorites", "Index", "Favorites")</li>
+                    <li>@Html.ActionLink("Tags", "Index", "Tags")</li>
                     @if (MediaManager.Models.SiteSettings.StorageRandomEnabled)
                     {
                         <li>@Html.ActionLink("Storage Random", "StorageRandom", "Media")</li>

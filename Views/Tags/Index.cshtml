@@ -1,0 +1,177 @@
+@using MediaManager.Models
+@model List<MediaManager.Controllers.TagsController.FileView>
+@{
+    ViewBag.Title = "Tags";
+    List<Tags.Tag> allTags = ViewBag.AllTags;
+    List<int> picked = ViewBag.Picked;
+    bool matchAll = ViewBag.MatchAll == true;
+    string sort = ViewBag.Sort;
+
+    // Link to this page with a different set of tags / match / sort
+    Func<IEnumerable<int>, bool, string, string> link = (ids, all, s) =>
+        Url.Action("Index", new { tags = string.Join(",", ids), all = all ? (bool?)true : null, sort = s == "tagged" ? null : s });
+}
+
+<h2>Tags</h2>
+<p style="opacity:.8;">
+    Your own labels for files. Tag a file on its page (under the buttons), or tag many at once in a Gallery with
+    &#9745; Select &rarr; &#127991; Tag. Pick tags below to see everything that has them, from every folder.
+</p>
+
+@Html.Partial("_MediaTools")
+
+<style>
+    .tags-manage { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .tags-manage .tag-pick {
+        display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px; border-radius: 16px;
+        border: 1px solid rgba(42,122,226,.5); text-decoration: none;
+    }
+    .tags-manage .tag-pick.is-picked { background: #2a7ae2; border-color: #2a7ae2; color: #fff; }
+    .tags-manage .tag-pick.is-picked .tag-count { opacity: .9; }
+    .tag-count { font-size: 12px; opacity: .7; }
+    .tag-tools button { border: 0; background: none; padding: 0 3px; cursor: pointer; opacity: .65; font-size: 13px; color: inherit; }
+    .tag-tools button:hover { opacity: 1; }
+    .tags-new { display: flex; gap: 6px; align-items: center; margin: 6px 0 14px; flex-wrap: wrap; }
+    .tags-browse-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 10px 0 18px; }
+    .tags-browse-bar a.active { font-weight: bold; text-decoration: underline; }
+</style>
+
+<div class="tags-new">
+    <input type="text" id="newTagName" class="form-control" placeholder="New tag name" maxlength="@Tags.MaxNameLength" style="max-width:260px;" />
+    <button type="button" id="newTagBtn" class="btn btn-default btn-sm">Create tag</button>
+</div>
+
+@if (!allTags.Any())
+{
+    <p>No tags yet.</p>
+}
+else
+{
+    <p style="margin:0; font-size:13px; opacity:.8;">Click tags to pick them (click again to drop one). &#9998; renames, &times; deletes.</p>
+    <div class="tags-manage">
+        @foreach (var t in allTags)
+        {
+            bool isPicked = picked.Contains(t.TagId);
+            var next = isPicked ? picked.Where(id => id != t.TagId) : picked.Concat(new[] { t.TagId });
+            <span class="tag-pick@(isPicked ? " is-picked" : "")" data-id="@t.TagId" data-name="@t.Name">
+                <a href="@link(next, matchAll, sort)" style="color:inherit; text-decoration:none;">
+                    @t.Name <span class="tag-count">@t.FileCount</span>
+                </a>
+                <span class="tag-tools">
+                    <button type="button" class="renameTagBtn" title="Rename this tag">&#9998;</button>
+                    <button type="button" class="deleteTagBtn" title="Delete this tag (the files stay)">&times;</button>
+                </span>
+            </span>
+        }
+    </div>
+}
+
+@if (picked.Any())
+{
+    <div class="tags-browse-bar">
+        <strong>@Model.Count file@(Model.Count == 1 ? "" : "s")</strong>
+        @if (picked.Count > 1)
+        {
+            <span>
+                Match:
+                <a href="@link(picked, false, sort)" class="@(matchAll ? "" : "active")" title="Files with at least one of the picked tags">any tag</a> &middot;
+                <a href="@link(picked, true, sort)" class="@(matchAll ? "active" : "")" title="Only files with every picked tag">all tags</a>
+            </span>
+        }
+        <span>
+            Sort:
+            <a href="@link(picked, matchAll, "tagged")" class="@(sort == "tagged" ? "active" : "")">newest tagged</a> &middot;
+            <a href="@link(picked, matchAll, "name")" class="@(sort == "name" ? "active" : "")">name</a> &middot;
+            <a href="@link(picked, matchAll, "folder")" class="@(sort == "folder" ? "active" : "")">folder</a>
+        </span>
+        <a href="@Url.Action("Index")">Clear</a>
+    </div>
+
+    <div id="tagFiles" style="text-align:center;">
+        @if (!Model.Any())
+        {
+            <p>No files have @(matchAll ? "all of these tags" : "these tags").</p>
+        }
+        @foreach (var f in Model)
+        {
+            <div class="media-item tag-file" data-folder="@f.Folder" data-file="@f.FileName"
+                 style="margin-bottom:25px; border-bottom:1px solid #555; padding-bottom:15px;">
+                <h4 style="word-break:break-all;">@f.FileName</h4>
+                <div style="margin-bottom:8px; opacity:.8;">
+                    in @Html.ActionLink(string.IsNullOrEmpty(f.Folder) ? "(top folder)" : f.Folder, "Gallery", "Media", new { folder = f.Folder }, null)
+                </div>
+                @if (!f.Exists)
+                {
+                    <p class="text-danger">This file is no longer there (it was moved, renamed or deleted outside the site).</p>
+                }
+                else
+                {
+                    <div class="media-player" data-src="@f.Url" data-file="@f.FileName" data-thumb="@f.ThumbUrl" data-compact="true" data-max-height="500px"></div>
+                }
+                <div class="tag-list">
+                    @foreach (string n in f.TagNames)
+                    {
+                        <span class="tag-chip">@n</span>
+                    }
+                </div>
+                <div class="media-actions" style="margin-top:10px;">
+                    @if (f.Exists)
+                    {
+                        @Html.ActionLink("View", "ViewMedia", "Media", new { folder = f.Folder, file = f.FileName }, new { @class = "btn btn-default btn-sm" })
+                    }
+                    else
+                    {
+                        <button type="button" class="untagMissingBtn btn btn-default btn-sm">Take the tags off</button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@section scripts {
+    <script src="@Url.Versioned("~/Scripts/media-common.js")"></script>
+    <script>
+        (function () {
+            const T = window.MediaTools;
+            const picked = @Html.Raw(Json.Encode(picked));
+
+            $('#newTagBtn').on('click', function () {
+                const name = $('#newTagName').val().trim();
+                if (!name) return;
+                T.post('@Url.Action("Create", "Tags")', { name }).then(() => location.reload(), () => { });
+            });
+            $('#newTagName').on('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#newTagBtn').click(); } });
+
+            $(document).on('click', '.renameTagBtn', function () {
+                const $tag = $(this).closest('.tag-pick');
+                const name = prompt('Rename the tag "' + $tag.attr('data-name') + '" to:', $tag.attr('data-name'));
+                if (!name || name.trim() === $tag.attr('data-name')) return;
+                T.post('@Url.Action("Rename", "Tags")', { id: $tag.attr('data-id'), name }).then(() => location.reload(), () => { });
+            });
+
+            $(document).on('click', '.deleteTagBtn', function () {
+                const $tag = $(this).closest('.tag-pick');
+                const count = $tag.find('.tag-count').text().trim();
+                if (!confirm(`Delete the tag "${$tag.attr('data-name')}"? It comes off ${count} file${count === '1' ? '' : 's'}; the files themselves stay.`)) return;
+                T.post('@Url.Action("Delete", "Tags")', { id: $tag.attr('data-id') }).then(() => {
+                    // Drop it from the picked tags too
+                    const left = picked.filter(id => String(id) !== $tag.attr('data-id'));
+                    const url = new URL(location.href);
+                    if (left.length) url.searchParams.set('tags', left.join(',')); else url.searchParams.delete('tags');
+                    location.href = url.toString();
+                }, () => { });
+            });
+
+            // A tagged file that's gone (moved / deleted outside the site): take the picked tags off it
+            $(document).on('click', '.untagMissingBtn', async function () {
+                const $item = $(this).closest('.tag-file');
+                for (const id of picked)
+                    await T.post('@Url.Action("Remove", "Tags")', { id, folder: $item.attr('data-folder'), file: $item.attr('data-file') }).catch(() => { });
+                $item.fadeOut(200, () => $item.remove());
+            });
+
+            T.pauseVideosOutOfView();
+        })();
+    </script>
+}
