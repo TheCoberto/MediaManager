@@ -1,0 +1,263 @@
+@{
+    ViewBag.Title = "Duplicates";
+    string folder = ViewBag.Folder;
+}
+
+<h2>Duplicates</h2>
+<p style="opacity:.8;">
+    Finds files with exactly the same contents, whatever they're called. Only files that share a size with another
+    are read, so scanning is quick unless there are big videos to compare. Extra copies go to the
+    @Html.ActionLink("Recycle Bin", "Index", "RecycleBin"), so you can get them back.
+</p>
+
+@Html.Partial("_MediaTools")
+
+<style>
+    .dup-scope { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 15px; }
+    .dup-scope input[type=text] { min-width: 260px; flex: 1 1 260px; max-width: 520px; }
+    .dup-progress { margin: 10px 0; }
+    .dup-bar { height: 8px; border-radius: 4px; background: rgba(127,127,127,.25); overflow: hidden; max-width: 520px; }
+    .dup-bar > div { height: 100%; width: 0; background: #2a7ae2; transition: width .3s; }
+    .dup-summary { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 15px 0; }
+    .dup-group { border: 1px solid rgba(127,127,127,.4); border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; }
+    .dup-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .dup-file { display: flex; gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(127,127,127,.2); }
+    .dup-file.is-keep { background: rgba(42,122,226,.08); }
+    .dup-file label { white-space: nowrap; margin: 0; font-weight: normal; cursor: pointer; min-width: 64px; }
+    .dup-thumb { width: 120px; flex: 0 0 120px; text-align: center; }
+    .dup-thumb img { max-width: 120px; max-height: 90px; }
+    .dup-thumb .kind-icon { font-size: 32px; }
+    .dup-name { flex: 1 1 auto; min-width: 0; word-break: break-all; }
+    .dup-name small { opacity: .75; }
+</style>
+
+<div class="dup-scope">
+    <label for="dupFolder" style="margin:0;">Folder</label>
+    <input type="text" id="dupFolder" class="form-control" list="dupFolderList" value="@folder" placeholder="(whole library)" />
+    <datalist id="dupFolderList"></datalist>
+    <label style="margin:0; font-weight:normal; white-space:nowrap;"><input type="checkbox" id="dupSubs" checked /> Include subfolders</label>
+    <button type="button" id="dupScanBtn" class="btn btn-primary">Find duplicates</button>
+    <button type="button" id="dupStopBtn" class="btn btn-default" style="display:none;">Stop</button>
+</div>
+
+<div id="dupProgress" class="dup-progress" style="display:none;">
+    <div id="dupProgressText">Starting...</div>
+    <div class="dup-bar"><div id="dupBar"></div></div>
+</div>
+
+<div id="dupSummary" class="dup-summary" style="display:none;">
+    <span id="dupSummaryText"></span>
+    <button type="button" id="dupDeleteAllBtn" class="btn btn-danger btn-sm">Delete all extra copies</button>
+</div>
+
+<div id="dupResults"></div>
+
+@section scripts {
+    <script src="@Url.Versioned("~/Scripts/media-common.js")"></script>
+    <script>
+        (function () {
+            const T = window.MediaTools;
+            const URL_START = '@Url.Action("Start", "Duplicates")';
+            const URL_STOP = '@Url.Action("Stop", "Duplicates")';
+            const URL_STATUS = '@Url.Action("Status", "Duplicates")';
+            const URL_DELETE = '@Url.Action("DeleteDuplicate", "Media")';
+            let scanId = null;
+
+            function formatSize(bytes) {
+                const units = ['bytes', 'KB', 'MB', 'GB', 'TB'];
+                let i = 0;
+                while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+                return (i === 0 ? bytes : bytes.toFixed(bytes < 10 ? 1 : 0)) + ' ' + units[i];
+            }
+
+            // Folder suggestions for the box
+            $.getJSON(window.MEDIA_URLS.folders, { v: Date.now() }).done(list => {
+                $('#dupFolderList').html((list || []).map(f => '<option value="' + T.escapeHtml(f) + '">').join(''));
+            });
+
+            // ---------- scanning ----------
+
+            $('#dupScanBtn').on('click', function () {
+                $('#dupResults').empty();
+                $('#dupSummary').hide();
+                T.busy($('#dupScanBtn'), 'Scanning...');
+                $('#dupStopBtn').show();
+                showProgress('Listing files...', 0);
+                T.post(URL_START, { folder: $('#dupFolder').val(), subfolders: $('#dupSubs').prop('checked') }).then(res => {
+                    scanId = res.id;
+                    poll();
+                }, () => finishScan());
+            });
+
+            $('#dupStopBtn').on('click', function () {
+                if (scanId) T.post(URL_STOP, { id: scanId }).catch(() => { });
+            });
+
+            function showProgress(text, fraction) {
+                $('#dupProgress').show();
+                $('#dupProgressText').text(text);
+                $('#dupBar').css('width', Math.round(Math.max(0, Math.min(1, fraction)) * 100) + '%');
+            }
+
+            function finishScan() {
+                T.idle($('#dupScanBtn'));
+                $('#dupStopBtn').hide();
+            }
+
+            function poll() {
+                $.getJSON(URL_STATUS, { id: scanId, v: Date.now() })
+                    .done(s => {
+                        if (!s || !s.success) { finishScan(); showProgress((s && s.message) || "Couldn't check the scan.", 0); return; }
+                        const skipped = s.skipped ? ` (${s.skipped} couldn't be read)` : '';
+                        switch (s.phase) {
+                            case 'listing':
+                                showProgress('Listing files...', 0);
+                                break;
+                            case 'sampling':
+                                showProgress(`${s.filesFound} files. Checking the ${s.total} that share a size with another: ${s.done} of ${s.total}${skipped}`,
+                                    s.total ? s.done / s.total * 0.3 : 0.3);
+                                break;
+                            case 'comparing':
+                                showProgress(`Comparing the whole of ${s.total} likely copies: ${formatSize(s.bytesDone)} of ${formatSize(s.bytesTotal)}${skipped}`,
+                                    0.3 + (s.bytesTotal ? s.bytesDone / s.bytesTotal * 0.7 : 0.7));
+                                break;
+                            case 'done':
+                                finishScan();
+                                showProgress(`Checked ${s.filesFound} files${skipped}.`, 1);
+                                showResults(s);
+                                return;
+                            case 'stopped':
+                                finishScan();
+                                showProgress('Stopped.', 0);
+                                return;
+                            default:
+                                finishScan();
+                                showProgress('The scan failed: ' + (s.error || 'unknown error'), 0);
+                                return;
+                        }
+                        setTimeout(poll, 800);
+                    })
+                    .fail(xhr => {
+                        if (xhr.status === 401) { finishScan(); T.showLoginExpired(); return; }
+                        setTimeout(poll, 3000); // the site may be restarting
+                    });
+            }
+
+            // ---------- results ----------
+
+            function showResults(s) {
+                const groups = s.groups || [];
+                if (!groups.length) {
+                    $('#dupResults').html('<p>No duplicates found.</p>');
+                    return;
+                }
+                $('#dupResults').html(groups.map(groupHtml).join(''));
+                if (s.groupCount > groups.length)
+                    $('#dupResults').append(`<p style="opacity:.8;">Showing the ${groups.length} groups that free the most space, of ${s.groupCount}. Delete some, then scan again for the rest.</p>`);
+                updateSummary();
+            }
+
+            let groupNumber = 0;
+            function groupHtml(files) {
+                const g = groupNumber++;
+                return `<div class="dup-group" data-size="${files[0].size}">
+                    <div class="dup-head">
+                        <span class="dup-head-text"></span>
+                        <button type="button" class="btn btn-default btn-sm dupDeleteOthersBtn">Delete the extra copies</button>
+                    </div>
+                    ${files.map((f, i) => fileHtml(f, g, i === 0)).join('')}
+                </div>`;
+            }
+
+            function fileHtml(f, g, keep) {
+                const view = T.viewUrl(f.folder, f.file);
+                const thumb = f.kind === 'image' || f.kind === 'video'
+                    ? `<img src="${T.escapeHtml(f.thumb || (f.kind === 'image' ? f.url : ''))}" loading="lazy" alt="">`
+                    : `<div class="kind-icon">${f.kind === 'audio' ? '&#127925;' : '&#128196;'}</div>`;
+                return `<div class="dup-file${keep ? ' is-keep' : ''}" data-folder="${T.escapeHtml(f.folder)}" data-file="${T.escapeHtml(f.file)}">
+                    <label><input type="radio" name="keep-${g}"${keep ? ' checked' : ''}> Keep</label>
+                    <a class="dup-thumb" href="${T.escapeHtml(view)}">${f.kind === 'video' && !f.thumb ? '<div class="kind-icon">&#127916;</div>' : thumb}</a>
+                    <div class="dup-name">
+                        <a href="${T.escapeHtml(view)}">${T.escapeHtml(f.file)}</a><br>
+                        <small>${T.escapeHtml(f.folder || '(top folder)')} &middot; modified ${T.escapeHtml(f.modified)}</small>
+                    </div>
+                </div>`;
+            }
+
+            // Header line of each group and the total at the top
+            function updateSummary() {
+                let groups = 0, extra = 0, bytes = 0;
+                $('.dup-group').each(function () {
+                    const $g = $(this);
+                    const count = $g.find('.dup-file').length;
+                    if (count < 2) { $g.remove(); return; }
+                    const size = Number($g.attr('data-size'));
+                    groups++; extra += count - 1; bytes += size * (count - 1);
+                    $g.find('.dup-head-text').html(`<b>${count} copies</b> &middot; ${formatSize(size)} each &middot; ${formatSize(size * (count - 1))} to free`);
+                });
+                if (!groups) {
+                    $('#dupSummary').hide();
+                    $('#dupResults').html('<p>No duplicates left.</p>');
+                    return;
+                }
+                $('#dupSummaryText').html(`<b>${groups}</b> file${groups === 1 ? '' : 's'} with copies: deleting the <b>${extra}</b> extra cop${extra === 1 ? 'y' : 'ies'} frees <b>${formatSize(bytes)}</b>.`);
+                $('#dupSummary').show();
+            }
+
+            $(document).on('change', '.dup-file input[type=radio]', function () {
+                const $g = $(this).closest('.dup-group');
+                $g.find('.dup-file').removeClass('is-keep');
+                $(this).closest('.dup-file').addClass('is-keep');
+            });
+
+            // Moves a group's unticked copies to the Recycle Bin. Resolves with the errors (file: message).
+            async function deleteExtras($g, onEach) {
+                const $keep = $g.find('.dup-file.is-keep');
+                const keep = { keepFolder: $keep.attr('data-folder'), keepFile: $keep.attr('data-file') };
+                const errors = [];
+                for (const row of $g.find('.dup-file').not('.is-keep').toArray()) {
+                    const $row = $(row);
+                    if (onEach) onEach();
+                    try {
+                        await T.post(URL_DELETE, Object.assign({ folder: $row.attr('data-folder'), file: $row.attr('data-file') }, keep), () => true);
+                        $row.remove();
+                    } catch (err) {
+                        errors.push($row.attr('data-file') + ': ' + err.message);
+                    }
+                }
+                return errors;
+            }
+
+            $(document).on('click', '.dupDeleteOthersBtn', async function () {
+                const $g = $(this).closest('.dup-group');
+                const extra = $g.find('.dup-file').not('.is-keep').length;
+                const kept = $g.find('.dup-file.is-keep').attr('data-file');
+                if (!confirm(`Move ${extra} extra cop${extra === 1 ? 'y' : 'ies'} to the Recycle Bin and keep "${kept}"?`)) return;
+                T.busy($(this), 'Deleting...');
+                const errors = await deleteExtras($g);
+                T.idle($(this));
+                updateSummary();
+                if (errors.length) alert("Some copies weren't deleted:\n\n" + errors.join('\n'));
+            });
+
+            $('#dupDeleteAllBtn').on('click', async function () {
+                const $groups = $('.dup-group');
+                let extra = 0;
+                $groups.each(function () { extra += $(this).find('.dup-file').not('.is-keep').length; });
+                if (!confirm(`Move all ${extra} extra copies to the Recycle Bin, keeping the ticked copy of each file?`)) return;
+                const $btn = $(this);
+                let n = 0;
+                const errors = [];
+                try {
+                    for (const g of $groups.toArray())
+                        errors.push(...await deleteExtras($(g), () => T.busy($btn, `Deleting ${++n} of ${extra}...`)));
+                } finally {
+                    T.idle($btn);
+                }
+                updateSummary();
+                alert(`Moved ${n - errors.length} cop${n - errors.length === 1 ? 'y' : 'ies'} to the Recycle Bin.` +
+                    (errors.length ? `\n\nNot deleted (${errors.length}):\n\n${errors.join('\n')}` : ''));
+            });
+        })();
+    </script>
+}

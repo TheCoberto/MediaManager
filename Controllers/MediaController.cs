@@ -397,6 +397,40 @@ namespace MediaManager.Controllers
             Favorites.Set(folder, file, false);
             Flags.Forget(folder, file);
             Thumbnails.Forget(folder, file);
+            PlayableCopy.Forget(folder, file);
+            InvalidateFolderCache(folder);
+
+            return Json(new { success = true });
+        }
+
+        /// <summary>
+        /// Duplicates page: moves an extra copy to the Recycle Bin, like DeleteMedia, but only if the copy being kept
+        /// is still there and both still match (same size, same start and end), in case either changed since the scan.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public JsonResult DeleteDuplicate(string folder, string file, string keepFolder, string keepFile)
+        {
+            string fullPath = MediaPaths.ResolveFile(folder, file);
+            string keepPath = MediaPaths.ResolveFile(keepFolder, keepFile);
+            if (fullPath == null || keepPath == null)
+                return Json(new { success = false, message = "Invalid parameters." });
+            if (string.IsNullOrWhiteSpace(folder))
+                return Json(new { success = false, message = "Files at the very top of the library can't be deleted here. Keep this one instead." });
+            if (string.Equals(Path.GetFullPath(fullPath), Path.GetFullPath(keepPath), StringComparison.OrdinalIgnoreCase))
+                return Json(new { success = false, message = "That's the copy being kept." });
+            if (!System.IO.File.Exists(fullPath))
+                return Json(new { success = false, message = "File not found (already deleted?)." });
+            if (!System.IO.File.Exists(keepPath))
+                return Json(new { success = false, message = "The copy being kept isn't there any more, so this one wasn't deleted." });
+            if (!DuplicateFinder.StillMatch(fullPath, keepPath))
+                return Json(new { success = false, message = "The two files don't match any more, so nothing was deleted. Scan again." });
+
+            RecycleBin.Recycle(fullPath, RecycleBin.SourceGallery); // restorable from the Recycle Bin page
+            Favorites.Set(folder, file, false);
+            Flags.Forget(folder, file);
+            Thumbnails.Forget(folder, file);
+            PlayableCopy.Forget(folder, file);
             InvalidateFolderCache(folder);
 
             return Json(new { success = true });
@@ -425,6 +459,7 @@ namespace MediaManager.Controllers
             Favorites.Rename(folder, oldName, newName);
             Flags.Move(folder, oldName, folder, newName);
             Thumbnails.Forget(folder, oldName);
+            PlayableCopy.Forget(folder, oldName);
             InvalidateFolderCache(folder);
 
             return Json(new { success = true, newName });
@@ -475,6 +510,7 @@ namespace MediaManager.Controllers
             Favorites.Move(folder, file, newFolder, newName);
             Flags.Move(folder, file, newFolder, newName);
             Thumbnails.Forget(folder, file);
+            PlayableCopy.Forget(folder, file);
 
             InvalidateFolderCache(folder);
             InvalidateFolderCache(newFolder);
@@ -856,6 +892,7 @@ namespace MediaManager.Controllers
                 // Clear the corrupted flag (a Marked-for-deletion flag stays), and remake the thumbnail
                 Flags.Set(folder, fileName, false, flags.ToBeDeleted);
                 Thumbnails.Forget(folder, fileName);
+                PlayableCopy.Forget(folder, fileName);
 
                 return Json(new { success = true, message = "File fixed and re-verified." });
             }
@@ -889,6 +926,8 @@ namespace MediaManager.Controllers
                 return Json(new { success = false, message = error });
 
             Thumbnails.Forget(folder, Path.GetFileName(serverPath));
+
+            PlayableCopy.Forget(folder, Path.GetFileName(serverPath));
             InvalidateFolderCache(folder);
             return Json(new { success = true, @fixed = true, message = "Fixed: you can skip through it in any player now." });
         }

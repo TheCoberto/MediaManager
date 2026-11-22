@@ -128,6 +128,7 @@
     <Compile Include="Controllers\ImagesController.cs" />
     <Compile Include="Controllers\LoginController.cs" />
     <Compile Include="Controllers\MediaController.cs" />
+    <Compile Include="Controllers\DuplicatesController.cs" />
     <Compile Include="Controllers\FavoritesController.cs" />
     <Compile Include="Controllers\RecycleBinController.cs" />
     <Compile Include="Controllers\DownloadersController.cs" />
@@ -141,6 +142,7 @@
     </Compile>
     <Compile Include="Models\Constants\Constants.cs" />
     <Compile Include="Models\DapperORM.cs" />
+    <Compile Include="Models\DuplicateFinder.cs" />
     <Compile Include="Models\FileViewModel.cs" />
     <Compile Include="Models\HiddenFolders.cs" />
     <Compile Include="Models\MediaPaths.cs" />
@@ -150,10 +152,12 @@
     <Compile Include="Models\Thumbnails.cs" />
     <Compile Include="Models\MediaKind.cs" />
     <Compile Include="Models\ChunkedUpload.cs" />
+    <Compile Include="Models\PlayableCopy.cs" />
     <Compile Include="Models\VideoIndex.cs" />
     <Compile Include="Models\ZipDownload.cs" />
     <Compile Include="Models\GalleryOrder.cs" />
     <Compile Include="Controllers\BulkDownloadController.cs" />
+    <Compile Include="Controllers\PlayableController.cs" />
     <Compile Include="Controllers\ThumbnailsController.cs" />
     <Compile Include="Models\RecycleBin.cs" />
     <Compile Include="Models\NaturalStringComparer.cs" />
@@ -215,6 +219,7 @@
     <Content Include="Views\Media\StorageRandom.cshtml" />
     <Content Include="Scripts\media-common.js" />
     <Content Include="Scripts\upload-queue.js" />
+    <Content Include="Views\Duplicates\Index.cshtml" />
     <Content Include="Views\Media\Flagged.cshtml" />
     <Content Include="Views\Shared\_MediaTools.cshtml" />
     <Content Include="Views\Favorites\Index.cshtml" />

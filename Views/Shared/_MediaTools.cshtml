@@ -70,6 +70,9 @@
         document = MediaManager.Models.Constants.Constants.DocumentExtensions
     }));
 
+    // Videos browsers can't play, shown through an MP4 copy the server makes (Models/PlayableCopy.cs)
+    window.MEDIA_PLAYABLE = @Html.Raw(Json.Encode(MediaManager.Models.PlayableCopy.Extensions));
+
     window.MEDIA_URLS = {
         rename: '@Url.Action("RenameMedia", "Media")',
         move: '@Url.Action("MoveMedia", "Media")',
@@ -78,6 +81,8 @@
         unmark: '@Url.Action("UnmarkFile", "Media")',
         fix: '@Url.Action("FixCorruptedFile", "Media")',
         fixSeeking: '@Url.Action("FixSeeking", "Media")',
+        playableStatus: '@Url.Action("Status", "Playable")',
+        playableStart: '@Url.Action("Start", "Playable")',
         clearCache: '@Url.Action("ClearMediaCache", "Media")',
         folders: '@Url.Action("GetFolders", "Media")',
         view: '@Url.Action("ViewMedia", "Media")',
