@@ -1,3 +1,4 @@
+using System;
 using System.Configuration;
 using System.IO;
 
@@ -31,6 +32,20 @@ namespace MediaManager.Models
 
         /// <summary>Largest image a guest can upload. Site.config: GuestMaxUploadMB, default 50 MB.</summary>
         public static long GuestMaxUploadBytes => GetMegabytes("GuestMaxUploadMB", 50);
+
+        /// <summary>
+        /// How long a login lasts without being used, in minutes. Site.config: LoginHours (decimals allowed, e.g. 0.5),
+        /// default 12 hours. Playing videos and loading pictures count as use.
+        /// </summary>
+        public static int LoginMinutes
+        {
+            get
+            {
+                double hours = double.TryParse(ConfigurationManager.AppSettings["LoginHours"], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var h) && h > 0 ? h : 12;
+                return (int)Math.Max(1, Math.Min(hours * 60, 30 * 24 * 60)); // 1 minute to 30 days
+            }
+        }
 
         /// <summary>Folder containing ffmpeg.exe, ffprobe.exe and yt-dlp.exe.</summary>
         public static string ToolsFolder => Get("ToolsFolder", @"C:\Tools\");
