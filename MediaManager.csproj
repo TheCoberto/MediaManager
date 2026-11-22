@@ -132,6 +132,7 @@
     <Compile Include="Controllers\DuplicatesController.cs" />
     <Compile Include="Controllers\EmptyFoldersController.cs" />
     <Compile Include="Controllers\FavoritesController.cs" />
+    <Compile Include="Controllers\RecentController.cs" />
     <Compile Include="Controllers\RecycleBinController.cs" />
     <Compile Include="Controllers\DownloadersController.cs" />
     <Compile Include="Filters\AuthFilter.cs" />
@@ -149,6 +150,7 @@
     <Compile Include="Models\EmptyFolders.cs" />
     <Compile Include="Models\FileViewModel.cs" />
     <Compile Include="Models\HiddenFolders.cs" />
+    <Compile Include="Models\LibraryIndex.cs" />
     <Compile Include="Models\MediaPaths.cs" />
     <Compile Include="Models\Favorites.cs" />
     <Compile Include="Models\FlaggedFile.cs" />
@@ -163,6 +165,7 @@
     <Compile Include="Models\GalleryOrder.cs" />
     <Compile Include="Controllers\BulkDownloadController.cs" />
     <Compile Include="Controllers\PlayableController.cs" />
+    <Compile Include="Controllers\StorageController.cs" />
     <Compile Include="Controllers\TagsController.cs" />
     <Compile Include="Controllers\ThumbnailsController.cs" />
     <Compile Include="Models\RecycleBin.cs" />
@@ -230,6 +233,8 @@
     <Content Include="Views\EmptyFolders\Index.cshtml" />
     <Content Include="Views\Media\Flagged.cshtml" />
     <Content Include="Views\Tags\Index.cshtml" />
+    <Content Include="Views\Storage\Index.cshtml" />
+    <Content Include="Views\Recent\Index.cshtml" />
     <Content Include="Views\Shared\_MediaTools.cshtml" />
     <Content Include="Views\Favorites\Index.cshtml" />
     <Content Include="Views\RecycleBin\Index.cshtml" />

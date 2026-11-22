@@ -51,6 +51,7 @@
                 {
                 <ul class="nav navbar-nav">
                     <li>@Html.ActionLink("Add Media", "AddMedia", "Media")</li>
+                    <li>@Html.ActionLink("Recently Added", "Index", "Recent")</li>
                     <li>@Html.ActionLink("Favorites", "Index", "Favorites")</li>
                     <li>@Html.ActionLink("Tags", "Index", "Tags")</li>
                     @if (MediaManager.Models.SiteSettings.StorageRandomEnabled)
@@ -73,9 +74,17 @@
                             </ul>
                         </li>
                     }
-                    <li>@Html.ActionLink("Duplicates", "Index", "Duplicates")</li>
-                    <li>@Html.ActionLink("Empty Folders", "Index", "EmptyFolders")</li>
-                        <li>@Html.ActionLink("Flagged", "Flagged", "Media")</li>
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+                            Tidy up <span class="caret"></span>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>@Html.ActionLink("Storage", "Index", "Storage")</li>
+                            <li>@Html.ActionLink("Duplicates", "Index", "Duplicates")</li>
+                            <li>@Html.ActionLink("Empty Folders", "Index", "EmptyFolders")</li>
+                            <li>@Html.ActionLink("Flagged", "Flagged", "Media")</li>
+                        </ul>
+                    </li>
                     <li>@Html.ActionLink("Recycle Bin", "Index", "RecycleBin")</li>
                     <li>@Html.ActionLink("Activity", "Index", "Activity")</li>
                 </ul>

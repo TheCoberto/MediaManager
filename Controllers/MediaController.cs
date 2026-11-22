@@ -769,6 +769,7 @@ namespace MediaManager.Controllers
         /// <summary>Forget every cached folder listing (after a whole folder tree changes).</summary>
         private static void InvalidateAllMediaCaches()
         {
+            LibraryIndex.Forget(); // Storage / Recently Added
             var cache = MemoryCache.Default;
             foreach (var key in cache.Select(kv => kv.Key).Where(k => k.StartsWith("MediaCache_", StringComparison.Ordinal)).ToList())
                 cache.Remove(key);
@@ -788,6 +789,7 @@ namespace MediaManager.Controllers
         /// </summary>
         private static void InvalidateFolderCache(string folder)
         {
+            LibraryIndex.Forget(); // Storage / Recently Added
             var cache = MemoryCache.Default;
             string normalized = MediaPaths.NormalizeFolder(folder);
             cache.Remove(BuildMediaCacheKey(normalized));

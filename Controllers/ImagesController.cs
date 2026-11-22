@@ -175,6 +175,7 @@ namespace MediaManager.Controllers
                 sqlcomm.ExecuteNonQuery();
             }
 
+            LibraryIndex.Forget(); // so Recently Added shows it straight away
             ActivityLog.Write(ActivityLog.Upload, "Uploaded to Guest Uploads (" + ActivityLog.FormatBytes(new FileInfo(filePath).Length) + ")"
                 + (string.IsNullOrWhiteSpace(description) ? "." : ": \"" + description.Trim() + "\"."),
                 MediaPaths.ToRelative(folder), fileName);

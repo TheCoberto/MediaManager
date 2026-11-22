@@ -1,0 +1,90 @@
+@using MediaManager.Models
+@model List<MediaManager.Controllers.RecentController.Item>
+@{
+    ViewBag.Title = "Recently Added";
+    int days = ViewBag.Days;
+    int total = ViewBag.Total;
+    DateTime builtAt = ViewBag.BuiltAt;
+    Func<int, string> dayLabel = d => d == 1 ? "Last day" : d == 7 ? "Last week" : d == 30 ? "Last month" : "Last 3 months";
+    Func<DateTime, string> heading = d =>
+        d.Date == DateTime.Today ? "Today" : d.Date == DateTime.Today.AddDays(-1) ? "Yesterday" : d.ToString("dddd, MMMM d");
+}
+
+<h2>Recently Added</h2>
+<p style="opacity:.8;">
+    The newest photos, videos, audio and documents in the whole library, by when they arrived (uploaded, copied onto
+    the drive or downloaded).
+</p>
+
+<style>
+    .rc-filters { margin: 10px 0 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .rc-filters a { padding: 4px 12px; border: 1px solid rgba(127,127,127,.5); border-radius: 14px; text-decoration: none; }
+    .rc-filters a.active { background: #2a7ae2; border-color: #2a7ae2; color: #fff; }
+    .rc-day { margin: 22px 0 8px; }
+    .rc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .rc-item { text-decoration: none; color: inherit; display: block; }
+    .rc-thumb {
+        height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+        border-radius: 6px; background: rgba(127,127,127,.15); font-size: 40px; position: relative;
+    }
+    .rc-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .rc-play { position: absolute; font-size: 26px; color: #fff; text-shadow: 0 0 6px rgba(0,0,0,.8); }
+    .rc-name { font-size: 13px; margin-top: 4px; word-break: break-all; line-height: 1.25; }
+    .rc-meta { font-size: 12px; opacity: .7; word-break: break-all; }
+</style>
+
+<div class="rc-filters">
+    @foreach (int d in MediaManager.Controllers.RecentController.DayChoices)
+    {
+        <a href="@Url.Action("Index", new { days = d })" class="@(d == days ? "active" : "")">@dayLabel(d)</a>
+    }
+</div>
+
+@if (!Model.Any())
+{
+    <p>Nothing new in the @dayLabel(days).ToLowerInvariant().</p>
+}
+else
+{
+    <p style="opacity:.8;">
+        @total.ToString("N0") file@(total == 1 ? "" : "s")@(total > Model.Count ? ", showing the newest " + Model.Count : "").
+    </p>
+
+    foreach (var day in Model.GroupBy(i => i.Added.Date))
+    {
+        <h4 class="rc-day">@heading(day.Key) <small style="opacity:.7;">(@day.Count())</small></h4>
+        <div class="rc-grid">
+            @foreach (var i in day)
+            {
+                string view = Url.Action("ViewMedia", "Media", new { folder = i.Folder, file = i.Name });
+                <a class="rc-item" href="@view" title="@i.Name">
+                    <div class="rc-thumb">
+                        @if (i.Thumb != null)
+                        {
+                            <img src="@i.Thumb" loading="lazy" alt="" />
+                        }
+                        else if (i.Kind == MediaKind.Image)
+                        {
+                            <img src="@i.Url" loading="lazy" alt="" />
+                        }
+                        else
+                        {
+                            @MediaKind.Icon(i.Name)
+                        }
+                        @if (i.Kind == MediaKind.Video && i.Thumb != null)
+                        {
+                            <span class="rc-play">&#9654;</span>
+                        }
+                    </div>
+                    <div class="rc-name">@i.Name</div>
+                    <div class="rc-meta">@(i.Folder.Length == 0 ? "(top folder)" : i.Folder) &middot; @i.Added.ToString("HH:mm") &middot; @ActivityLog.FormatBytes(i.Size)</div>
+                </a>
+            }
+        </div>
+    }
+}
+
+<p style="margin-top:24px; font-size:13px; opacity:.75;">
+    As of @builtAt.ToString("HH:mm") (kept for 10 minutes).
+    @Html.ActionLink("Refresh now", "Index", new { days, refresh = true })
+</p>
