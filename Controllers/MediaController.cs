@@ -370,16 +370,19 @@ namespace MediaManager.Controllers
 
         public ActionResult ViewMedia(string folder, string file)
         {
+            // Files at the very top of the library ('' folder) open too, e.g. from Duplicates or Recently Added;
+            // the view hides the tools that need a folder.
             string fullPath = MediaPaths.ResolveFile(folder, file);
-            if (string.IsNullOrWhiteSpace(folder) || fullPath == null || !System.IO.File.Exists(fullPath))
+            if (fullPath == null || !System.IO.File.Exists(fullPath))
                 return HttpNotFound();
-
-            ViewBag.Folder = MediaPaths.NormalizeFolder(folder);
-            ViewBag.File = file;
-            ViewBag.Url = MediaPaths.UrlFor(folder + "/" + file);
 
             // File details for the info panel (dimensions/duration are filled in by the browser)
             var info = new FileInfo(fullPath);
+
+            folder = MediaPaths.NormalizeFolder(folder);
+            ViewBag.Folder = folder;
+            ViewBag.File = file;
+            ViewBag.Url = MediaPaths.VersionedUrl(MediaPaths.ToRelative(fullPath), info);
             var model = new FileViewModel
             {
                 FileName = info.Name,
@@ -875,7 +878,7 @@ namespace MediaManager.Controllers
 
             ViewBag.Folder = folder;
             ViewBag.File = info.Name;
-            ViewBag.Url = MediaPaths.UrlFor(model.RelativePath);
+            ViewBag.Url = MediaPaths.VersionedUrl(model.RelativePath, info);
             ViewBag.Within = within;
             ViewBag.PoolCount = pool?.Count ?? allFiles.Count;
             ViewBag.IsFavorite = folder.Length > 0 && Favorites.IsFavorite(folder, info.Name);

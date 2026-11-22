@@ -193,6 +193,15 @@ namespace MediaManager.Models
             return System.Web.VirtualPathUtility.ToAbsolute(VirtualRoot) + "/" + string.Join("/", segments);
         }
 
+        /// <summary>
+        /// UrlFor plus "?v=" and the file's modified time and size, so a file changed in place (Fix File, Fix Seeking)
+        /// gets a new URL and browsers load the new one instead of the copy they cached.
+        /// </summary>
+        public static string VersionedUrl(string relativePath, FileInfo info)
+        {
+            return UrlFor(relativePath) + "?v=" + info.LastWriteTimeUtc.Ticks.ToString("x") + "-" + info.Length.ToString("x");
+        }
+
         /// <summary>Converts a physical path under the root to "a/b/file.ext" form.</summary>
         public static string ToRelative(string fullPath)
         {

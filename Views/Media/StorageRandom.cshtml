@@ -193,7 +193,7 @@ else
             $('#fixBtn').on('click', function () {
                 const $btn = $(this);
                 T.fix(folder, file, () => T.busy($btn, 'Fixing...')).then(
-                    fixed => { if (fixed) location.reload(); },
+                    fixed => { if (fixed) T.reloadWithMessage('Fixed: this is the repaired file playing now.'); },
                     () => T.idle($btn));
             });
 

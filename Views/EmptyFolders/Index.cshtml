@@ -22,6 +22,7 @@
     .ef-list { list-style: none; padding: 0; margin: 8px 0; }
     .ef-list li { padding: 5px 0; border-top: 1px solid rgba(127,127,127,.2); word-break: break-all; }
     .ef-list label { font-weight: normal; margin: 0; cursor: pointer; }
+    .ef-list .efTick { margin-right: 6px; }
     .ef-list small { opacity: .75; }
     .ef-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 </style>
@@ -51,7 +52,7 @@
         {
             <p style="opacity:.8;">
                 A folder with only empty folders inside shows once, as the top one. Deleting it removes everything
-                below it too. There's nothing in them to keep, so they're deleted outright (not moved to the Recycle Bin).
+                below it too. Click a name to open it in a new tab and check. There's nothing in them to keep, so they're deleted outright (not moved to the Recycle Bin).
             </p>
             <div class="ef-actions">
                 <label style="font-weight:normal; margin:0;"><input type="checkbox" id="efAll" checked /> All</label>
@@ -61,7 +62,9 @@
                 @foreach (string f in Model.Empty)
                 {
                     <li data-folder="@f">
-                        <label><input type="checkbox" class="efTick" checked /> @f</label>
+                        <input type="checkbox" class="efTick" checked title="Tick to delete" />
+                        <a href="@Url.Action("Gallery", "Media", new { folder = f })" target="_blank" rel="noopener"
+                           title="Open this folder in a new tab, to check it's empty">@f</a>
                     </li>
                 }
             </ul>

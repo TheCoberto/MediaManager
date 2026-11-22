@@ -12,12 +12,23 @@
     string kind = MediaManager.Models.MediaPaths.KindOf(file);
     bool isVideo = kind == MediaManager.Models.MediaKind.Video;
     bool isAudio = kind == MediaManager.Models.MediaKind.Audio;
+
+    // Move / Rename / Delete / the Corrupted flag work on files inside a folder, not loose files at the very top
+    bool hasFolder = folder.Length > 0;
 }
 
 <h2 style="word-break:break-all;">@file</h2>
 
 <p>
-    <u>@Html.ActionLink("← Back to Gallery", "Gallery", "Media", new { folder = folder }, null)</u>
+    @if (hasFolder)
+    {
+        <u>@Html.ActionLink("← Back to Gallery", "Gallery", "Media", new { folder = folder }, null)</u>
+    }
+    else
+    {
+        <u>@Html.ActionLink("← Home", "Index", "Home")</u>
+        <span style="opacity:.75; margin-left:8px;">This file is at the very top of the library, outside any folder.</span>
+    }
 </p>
 
 @Html.Partial("_MediaTools")
@@ -50,26 +61,35 @@
     <button id="favBtn" class="favBtn@(isFavorite ? " is-favorite" : "")" data-favorite="@(isFavorite ? "true" : "false")">
         @Html.Raw(isFavorite ? "&#9733; Favorite" : "&#9734; Favorite")
     </button>
-    <button id="moveBtn">Move</button>
-    <button id="copyBtn">Copy</button>
-    <button id="renameBtn">Rename</button>
-    @if (isCorrupted)
+    @if (hasFolder)
     {
-        if (isVideo)
-        {
-            <button id="fixBtn">Fix File</button>
-        }
-        <button id="unmarkBtn" title="Clear the Corrupted flag">Unmark Corrupted</button>
+        <button id="moveBtn">Move</button>
     }
-    else
+    <button id="copyBtn">Copy</button>
+    @if (hasFolder)
     {
-        <button id="corruptedBtn">Mark Corrupted</button>
+        <button id="renameBtn">Rename</button>
+        if (isCorrupted)
+        {
+            if (isVideo)
+            {
+                <button id="fixBtn">Fix File</button>
+            }
+            <button id="unmarkBtn" title="Clear the Corrupted flag">Unmark Corrupted</button>
+        }
+        else
+        {
+            <button id="corruptedBtn">Mark Corrupted</button>
+        }
     }
     @if (MediaManager.Models.VideoIndex.CanFix(System.IO.Path.GetExtension(file)))
     {
         <button id="fixSeekingBtn" title="For videos you can't skip through in Photos / Media Player. No quality is lost.">Fix Seeking</button>
     }
-    <button id="deleteBtn">Delete</button>
+    @if (hasFolder)
+    {
+        <button id="deleteBtn">Delete</button>
+    }
     <a href="@path" download="@file" style="margin-left:6px;">Download</a>
 </div>
 
@@ -80,7 +100,7 @@
     <h4 style="margin-top:0;">File info</h4>
     <table class="table table-condensed" style="margin-bottom:0;">
         <tr><th style="width:150px;">Name</th><td style="word-break:break-all;">@Model.FileName</td></tr>
-        <tr><th>Folder</th><td style="word-break:break-all;">@Html.ActionLink(string.IsNullOrEmpty(folder) ? "(top folder)" : folder, "Gallery", "Media", new { folder }, null)</td></tr>
+        <tr><th>Folder</th><td style="word-break:break-all;">@if (hasFolder) { @Html.ActionLink(folder, "Gallery", "Media", new { folder }, null) } else { <text>(top folder)</text> }</td></tr>
         <tr><th>Type</th><td>@Model.FileType (@Model.FileExtension.ToLowerInvariant())</td></tr>
         <tr><th>Size</th><td>@Model.FileSizeFormatted <span style="opacity:.7;">(@Model.FileSize.ToString("N0") bytes)</span></td></tr>
         <tr id="dimensionsRow" style="display:none;"><th>@(isVideo ? "Resolution" : "Dimensions")</th><td id="dimensions"></td></tr>
@@ -138,7 +158,7 @@
             $('#fixBtn').on('click', function () {
                 const $btn = $(this);
                 T.fix(folder, file, () => T.busy($btn, 'Fixing...')).then(
-                    fixed => { if (fixed) location.reload(); },
+                    fixed => { if (fixed) T.reloadWithMessage('Fixed: this is the repaired file playing now.'); },
                     () => T.idle($btn));
             });
 
@@ -155,7 +175,7 @@
                 }
                 T.showToast('Fixing, please wait...');
                 T.fixSeeking(folder, file).then(
-                    res => { alert(res.message); location.reload(); },
+                    res => T.reloadWithMessage(res.message),
                     () => location.reload()); // the error was shown; bring the player back
             });
 

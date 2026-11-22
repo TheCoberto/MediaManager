@@ -177,9 +177,9 @@
                     : `<div class="kind-icon">${f.kind === 'audio' ? '&#127925;' : '&#128196;'}</div>`;
                 return `<div class="dup-file${keep ? ' is-keep' : ''}" data-folder="${T.escapeHtml(f.folder)}" data-file="${T.escapeHtml(f.file)}">
                     <label><input type="radio" name="keep-${g}"${keep ? ' checked' : ''}> Keep</label>
-                    <a class="dup-thumb" href="${T.escapeHtml(view)}">${f.kind === 'video' && !f.thumb ? '<div class="kind-icon">&#127916;</div>' : thumb}</a>
+                    <a class="dup-thumb" href="${T.escapeHtml(view)}" target="_blank" rel="noopener">${f.kind === 'video' && !f.thumb ? '<div class="kind-icon">&#127916;</div>' : thumb}</a>
                     <div class="dup-name">
-                        <a href="${T.escapeHtml(view)}">${T.escapeHtml(f.file)}</a><br>
+                        <a href="${T.escapeHtml(view)}" target="_blank" rel="noopener" title="Open in a new tab (keeps these results)">${T.escapeHtml(f.file)}</a><br>
                         <small>${T.escapeHtml(f.folder || '(top folder)')} &middot; modified ${T.escapeHtml(f.modified)}</small>
                     </div>
                 </div>`;
