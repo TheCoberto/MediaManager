@@ -11,7 +11,8 @@ and Recently Added pages (`Models/LibraryIndex.cs`); for guests, shared folders 
 "Shared with me") and the Guestbook (`Models/Guestbook.cs`) (#26); security hardening and IP / role on every
 activity entry (#23, #24); Log out all other devices (#25); more activity logging, a site-wide wrong-password
 limit, view counts with a Most Viewed page, and the Activity page's weekly summary (#27); the "Logged in now"
-list with per-device log out (`Models/ActiveLogins.cs`, #29).
+list with per-device log out (`Models/ActiveLogins.cs`, #29); Audio / Video Downloader fixes (format fallback,
+ffmpeg location, yt-dlp's error shown) (#31) and yt-dlp updating itself after a failed download, then retrying (#32).
 
 ## Finding things
 
