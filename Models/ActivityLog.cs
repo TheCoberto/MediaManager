@@ -35,6 +35,12 @@ namespace MediaManager.Models
         public const string Login = "login";
         public const string Server = "server";
         public const string Guestbook = "guestbook";
+        public const string Download = "download";     // ZIP downloads, Audio / Video Downloader
+        public const string Hidden = "hidden";         // folders hidden from / shown on the home page
+        public const string Favorites = "favorites";
+
+        /// <summary>The start of every wrong-password entry (LoginController); LoginThrottle counts them after a restart.</summary>
+        public const string WrongPasswordPrefix = "Wrong password from ";
 
         public class Entry
         {
@@ -146,6 +152,81 @@ namespace MediaManager.Models
                     WHERE (@BeforeId IS NULL OR ActivityId < @BeforeId) AND (@ErrorsOnly = 0 OR IsError = 1)
                     ORDER BY ActivityId DESC",
                     new { Take = take, BeforeId = beforeId, ErrorsOnly = errorsOnly }).AsList();
+        }
+
+        /// <summary>Wrong passwords since a time, per device (LoginThrottle picks these up again after a restart).</summary>
+        public sealed class FailedLogins
+        {
+            public string Ip { get; set; }
+            public int Count { get; set; }
+            public DateTime LastUtc { get; set; }
+        }
+
+        public static List<FailedLogins> WrongPasswordsSince(DateTime sinceUtc)
+        {
+            using (var db = Db())
+            {
+                if (!HasWhoColumns(db))
+                    return new List<FailedLogins>();
+                // At is the server's local time (SYSDATETIME); compare and return in UTC
+                var offset = DateTime.Now - DateTime.UtcNow;
+                var rows = db.Query<FailedLogins>(@"
+                    SELECT Ip, COUNT(*) AS Count, MAX(At) AS LastUtc
+                    FROM ActivityLog
+                    WHERE Kind = @Kind AND IsError = 1 AND Ip IS NOT NULL AND At >= @Since AND Message LIKE @Prefix
+                    GROUP BY Ip",
+                    new { Kind = Login, Since = sinceUtc + offset, Prefix = WrongPasswordPrefix + "%" }).AsList();
+                foreach (var r in rows)
+                    r.LastUtc = DateTime.SpecifyKind(r.LastUtc - offset, DateTimeKind.Utc);
+                return rows;
+            }
+        }
+
+        /// <summary>The Activity page's "Last 7 days" panel.</summary>
+        public sealed class Summary
+        {
+            public int Days { get; set; }
+            public Dictionary<string, int> ByKind { get; set; } = new Dictionary<string, int>(); // kind -> entries (not errors)
+            public int Errors { get; set; }
+            public int OwnerLogins { get; set; }
+            public int GuestLogins { get; set; }
+            public int WrongPasswords { get; set; }
+            public List<string> WrongPasswordIps { get; set; } = new List<string>();
+            public List<string> LoginIps { get; set; } = new List<string>();
+            public List<MediaViews.Count> TopViewed { get; set; } = new List<MediaViews.Count>();
+            public int Views { get; set; }
+        }
+
+        public static Summary SummaryFor(int days)
+        {
+            var s = new Summary { Days = days };
+            using (var db = Db())
+            {
+                var p = new { Since = DateTime.Now.AddDays(-days), Login, Prefix = WrongPasswordPrefix + "%" };
+                foreach (var row in db.Query<(string Kind, int N)>(
+                    "SELECT Kind, COUNT(*) FROM ActivityLog WHERE At >= @Since AND IsError = 0 GROUP BY Kind", p))
+                    s.ByKind[row.Kind] = row.N;
+                s.Errors = db.ExecuteScalar<int>(
+                    "SELECT COUNT(*) FROM ActivityLog WHERE At >= @Since AND IsError = 1 AND NOT (Kind = @Login AND Message LIKE @Prefix)", p);
+                s.WrongPasswords = db.ExecuteScalar<int>(
+                    "SELECT COUNT(*) FROM ActivityLog WHERE At >= @Since AND Kind = @Login AND IsError = 1 AND Message LIKE @Prefix", p);
+                s.OwnerLogins = db.ExecuteScalar<int>(
+                    "SELECT COUNT(*) FROM ActivityLog WHERE At >= @Since AND Kind = @Login AND Message LIKE 'Owner logged in%'", p);
+                s.GuestLogins = db.ExecuteScalar<int>(
+                    "SELECT COUNT(*) FROM ActivityLog WHERE At >= @Since AND Kind = @Login AND Message LIKE 'Guest logged in%'", p);
+                if (HasWhoColumns(db))
+                {
+                    s.WrongPasswordIps = db.Query<string>(@"
+                        SELECT Ip FROM ActivityLog WHERE At >= @Since AND Kind = @Login AND IsError = 1 AND Message LIKE @Prefix AND Ip IS NOT NULL
+                        GROUP BY Ip ORDER BY COUNT(*) DESC", p).AsList();
+                    s.LoginIps = db.Query<string>(@"
+                        SELECT Ip FROM ActivityLog WHERE At >= @Since AND Kind = @Login AND IsError = 0 AND Message LIKE '% logged in%' AND Ip IS NOT NULL
+                        GROUP BY Ip ORDER BY MAX(At) DESC", p).AsList();
+                }
+            }
+            s.Views = MediaViews.TotalSince(DateTime.Now.AddDays(-days));
+            s.TopViewed = MediaViews.Top(5, DateTime.Now.AddDays(-days));
+            return s;
         }
 
         /// <summary>Removes entries older than KeepDays, at most once a day.</summary>

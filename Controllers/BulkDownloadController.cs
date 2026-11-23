@@ -58,8 +58,10 @@ namespace MediaManager.Controllers
             {
                 FullPath = p,
                 ZipPath = p.Substring(root.Length).Replace('\\', '/')
-            });
+            }).ToList();
 
+            ActivityLog.Write(ActivityLog.Download, "Downloaded the folder " + MediaPaths.NormalizeFolder(folder)
+                + (subfolders ? " with its subfolders" : "") + " as a ZIP (" + Files(items.Count) + ").");
             ZipDownload.Send(HttpContext, Path.GetFileName(path.TrimEnd('\\')) + ".zip", items);
             return new EmptyResult();
         }
@@ -94,6 +96,7 @@ namespace MediaManager.Controllers
             if (names.Count == 0)
                 return HttpNotFound();
 
+            ActivityLog.Write(ActivityLog.Download, "Downloaded " + Files(names.Count) + " from " + MediaPaths.NormalizeFolder(folder) + " as a ZIP.");
             string zipName = Path.GetFileName(path.TrimEnd('\\')) + " (" + names.Count + " file" + (names.Count == 1 ? "" : "s") + ").zip";
             ZipDownload.Send(HttpContext, zipName, names);
             return new EmptyResult();
@@ -113,9 +116,12 @@ namespace MediaManager.Controllers
                 .GroupBy(i => i.ZipPath, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
                 .ToList();
 
+            ActivityLog.Write(ActivityLog.Download, "Downloaded the favorites as a ZIP (" + Files(items.Count) + ").");
             ZipDownload.Send(HttpContext, "Favorites.zip", items);
             return new EmptyResult();
         }
+
+        private static string Files(int n) => n.ToString("N0") + " file" + (n == 1 ? "" : "s");
 
         /// <summary>Physical path of an existing folder under the media root (not the root itself, not the site's hidden folders).</summary>
         private static string ResolveFolder(string folder)

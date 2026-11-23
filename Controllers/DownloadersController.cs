@@ -65,7 +65,14 @@ namespace MediaManager.Controllers
                 process.WaitForExit();
 
                 if (process.ExitCode == 0 && System.IO.File.Exists(outputPath))
+                {
+                    ActivityLog.Write(ActivityLog.Download, "Downloaded " + fileName + " ("
+                        + ActivityLog.FormatBytes(new FileInfo(outputPath).Length) + ") from " + uri.AbsoluteUri);
                     return File(outputPath, mimeType, fileName);
+                }
+
+                ActivityLog.Error(ActivityLog.Download, "Couldn't download " + fileName + " from " + uri.AbsoluteUri
+                    + " (yt-dlp exit code " + process.ExitCode + ").");
             }
 
             return Content(failMessage);

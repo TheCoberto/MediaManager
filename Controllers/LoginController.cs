@@ -67,7 +67,7 @@ namespace MediaManager.Controllers
             }
 
             var pause = LoginThrottle.RecordFailure(client, out int triesLeft);
-            ActivityLog.Error(ActivityLog.Login, "Wrong password from " + client + (pause > TimeSpan.Zero ? " (paused for " + LoginThrottle.Describe(pause) + ")" : "") + ".");
+            ActivityLog.Error(ActivityLog.Login, ActivityLog.WrongPasswordPrefix + client +(pause > TimeSpan.Zero ? " (paused for " + LoginThrottle.Describe(pause) + ")" : "") + ".");
             if (pause > TimeSpan.Zero)
                 ViewBag.Error = $"Wrong password. Too many wrong passwords: wait {LoginThrottle.Describe(pause)}, then try again.";
             else if (triesLeft <= 2)

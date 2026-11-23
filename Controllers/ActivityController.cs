@@ -19,6 +19,9 @@ namespace MediaManager.Controllers
             ViewBag.PageSize = PageSize;
             try
             {
+                // The "Last 7 days" summary, on the first page only
+                if (before == null && !errors)
+                    ViewBag.Summary = ActivityLog.SummaryFor(7);
                 return View(ActivityLog.Recent(PageSize, before, errors));
             }
             catch (SqlException ex)

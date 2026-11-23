@@ -200,6 +200,24 @@ IF COL_LENGTH('dbo.ActivityLog', 'Role') IS NULL
     ALTER TABLE dbo.ActivityLog ADD Role NVARCHAR(10) NULL;
 GO
 
+-- One row per time a file's page was opened (Models/MediaViews.cs): view counts, Most Viewed, the weekly summary.
+-- Kept with the file through Rename / Move, removed when it's deleted.
+IF OBJECT_ID('dbo.MediaViews', 'U') IS NULL
+CREATE TABLE dbo.MediaViews (
+    ViewId   INT IDENTITY(1,1) PRIMARY KEY,
+    At       DATETIME2(0)   NOT NULL CONSTRAINT DF_MediaViews_At DEFAULT SYSDATETIME(),
+    Folder   NVARCHAR(1000) NOT NULL,          -- relative to the media root ('' = root)
+    FileName NVARCHAR(400)  NOT NULL,
+    Role     NVARCHAR(10)   NULL               -- Owner / Guest
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.MediaViews') AND name = 'IX_MediaViews_FileName')
+    CREATE INDEX IX_MediaViews_FileName ON dbo.MediaViews (FileName) INCLUDE (Folder);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.MediaViews') AND name = 'IX_MediaViews_At')
+    CREATE INDEX IX_MediaViews_At ON dbo.MediaViews (At);
+GO
+
 -- ============================================================
 -- Stored procedures (used by the Guest Uploads page)
 -- ============================================================

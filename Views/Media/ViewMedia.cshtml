@@ -150,6 +150,7 @@
         <tr><th>Created</th><td>@Model.CreatedDate.ToString("yyyy-MM-dd HH:mm")</td></tr>
         <tr><th>Modified</th><td>@Model.LastModified.ToString("yyyy-MM-dd HH:mm")</td></tr>
         <tr><th>Files in folder</th><td>@Model.FilesInDirectory</td></tr>
+        <tr><th>Views</th><td title="Times this file's page was opened (once per 30 minutes per browser)">@(ViewBag.Views ?? 0) &middot; @Html.ActionLink("Most viewed", "MostViewed", "Recent")</td></tr>
         <tr><th>Path</th><td style="word-break:break-all; opacity:.8;">@Model.FullPath</td></tr>
     </table>
     <p style="margin:10px 0 0; font-size:12px; opacity:.7;">

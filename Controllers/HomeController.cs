@@ -29,6 +29,7 @@ namespace MediaManager.Controllers
                 return Json(new { success = false, message = "Unknown folder." });
 
             HiddenFolders.Set(folder, hidden);
+            ActivityLog.Write(ActivityLog.Hidden, (hidden ? "Hid the folder " : "Showed the folder ") + folder + " on the home page.");
             return Json(new { success = true });
         }
     }

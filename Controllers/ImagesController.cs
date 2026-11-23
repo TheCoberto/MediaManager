@@ -57,6 +57,8 @@ namespace MediaManager.Controllers
                 string path = MediaPaths.ResolveFile(SiteSettings.ImageUploadFolder, image.Title);
                 if (path != null && System.IO.File.Exists(path))
                     RecycleBin.Recycle(path, RecycleBin.SourceImages, image.Description);
+                ActivityLog.Write(ActivityLog.Delete, "Deleted from Guest Uploads (moved to the Recycle Bin).",
+                    SiteSettings.ImageUploadFolder, image.Title);
             }
 
             DapperORM.ExecuteWithoutReturn("ImageDeleteById", param);
@@ -222,6 +224,7 @@ namespace MediaManager.Controllers
             param.Add("@ImageId", imageModel.ImageId);
             param.Add("@Description", imageModel.Description);
             DapperORM.ExecuteWithoutReturn("ImageUpdate", param);
+            ActivityLog.Write(ActivityLog.Rename, "Changed a Guest Uploads caption to \"" + imageModel.Description + "\".");
 
             return RedirectToAction("ImageManager");
         }   

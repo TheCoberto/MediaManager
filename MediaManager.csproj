@@ -181,6 +181,7 @@
     <Compile Include="Models\Roles.cs" />
     <Compile Include="Models\LoginThrottle.cs" />
     <Compile Include="Models\MediaAccess.cs" />
+    <Compile Include="Models\MediaViews.cs" />
     <Compile Include="Models\PasswordHasher.cs" />
     <Compile Include="Models\SiteSettings.cs" />
     <Compile Include="Models\ImageModel.cs" />
@@ -246,6 +247,7 @@
     <Content Include="Views\Tags\Index.cshtml" />
     <Content Include="Views\Storage\Index.cshtml" />
     <Content Include="Views\Recent\Index.cshtml" />
+    <Content Include="Views\Recent\MostViewed.cshtml" />
     <Content Include="Views\Shared\_MediaTools.cshtml" />
     <Content Include="Views\Favorites\Index.cshtml" />
     <Content Include="Views\RecycleBin\Index.cshtml" />

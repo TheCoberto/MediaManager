@@ -462,6 +462,9 @@ namespace MediaManager.Controllers
             ViewBag.IsFavorite = Favorites.IsFavorite(folder, info.Name);
             ViewBag.IsCorrupted = Flags.Get(folder, info.Name).Corrupted;
 
+            MediaViews.Record(HttpContext, folder, info.Name);
+            ViewBag.Views = MediaViews.CountFor(folder, info.Name);
+
             return View(model);
         }
 
@@ -479,6 +482,7 @@ namespace MediaManager.Controllers
             RecycleBin.Recycle(fullPath, RecycleBin.SourceGallery); // restorable from the Recycle Bin page
             Favorites.Set(folder, file, false);
             Tags.Forget(folder, file);
+            MediaViews.Forget(folder, file);
             Flags.Forget(folder, file);
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);
@@ -514,6 +518,7 @@ namespace MediaManager.Controllers
             RecycleBin.Recycle(fullPath, RecycleBin.SourceGallery); // restorable from the Recycle Bin page
             Favorites.Set(folder, file, false);
             Tags.Forget(folder, file);
+            MediaViews.Forget(folder, file);
             Flags.Forget(folder, file);
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);
@@ -546,6 +551,7 @@ namespace MediaManager.Controllers
             System.IO.File.Move(oldPath, newPath);
             Favorites.Rename(folder, oldName, newName);
             Tags.Rename(folder, oldName, newName);
+            MediaViews.Rename(folder, oldName, newName);
             Flags.Move(folder, oldName, folder, newName);
             Thumbnails.Forget(folder, oldName);
             PlayableCopy.Forget(folder, oldName);
@@ -656,6 +662,7 @@ namespace MediaManager.Controllers
             System.IO.File.Move(oldPath, Path.Combine(destinationFolder, newName));
             Favorites.Move(folder, file, newFolder, newName);
             Tags.Move(folder, file, newFolder, newName);
+            MediaViews.Move(folder, file, newFolder, newName);
             Flags.Move(folder, file, newFolder, newName);
             Thumbnails.Forget(folder, file);
             PlayableCopy.Forget(folder, file);
@@ -938,6 +945,7 @@ namespace MediaManager.Controllers
             ViewBag.Within = within;
             ViewBag.PoolCount = pool?.Count ?? allFiles.Count;
             ViewBag.IsFavorite = folder.Length > 0 && Favorites.IsFavorite(folder, info.Name);
+            MediaViews.Record(HttpContext, folder, info.Name);
             ViewBag.IsCorrupted = Flags.Get(folder, info.Name).Corrupted;
 
             return View("StorageRandom", model);
