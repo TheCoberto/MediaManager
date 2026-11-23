@@ -34,6 +34,7 @@ namespace MediaManager.Models
         public const string RecycleBin = "recyclebin";
         public const string Login = "login";
         public const string Server = "server";
+        public const string Guestbook = "guestbook";
 
         public class Entry
         {

@@ -121,6 +121,25 @@ GO
 -- (The old Videos and Sounds pages were removed: dbo.Videos / dbo.Sounds and their procedures are no
 -- longer created. Existing ones are left alone; drop them by hand if you want them gone.)
 
+-- Folders the owner shared with guests (Shared page, Models/SharedFolders.cs). Everything under one is shared too.
+IF OBJECT_ID('dbo.SharedFolders', 'U') IS NULL
+CREATE TABLE dbo.SharedFolders (
+    Folder    NVARCHAR(450) NOT NULL PRIMARY KEY,   -- relative to the media root, "a/b"
+    CreatedAt DATETIME      NOT NULL DEFAULT GETDATE()
+);
+GO
+
+-- Guestbook page (Models/Guestbook.cs): messages from guests and the owner.
+IF OBJECT_ID('dbo.GuestbookEntries', 'U') IS NULL
+CREATE TABLE dbo.GuestbookEntries (
+    EntryId   INT IDENTITY(1,1) PRIMARY KEY,
+    Name      NVARCHAR(50)   NOT NULL,
+    Message   NVARCHAR(1000) NOT NULL,
+    Role      VARCHAR(10)    NOT NULL,          -- 'Owner' or 'Guest'
+    CreatedAt DATETIME       NOT NULL DEFAULT GETDATE()
+);
+GO
+
 -- Owner's favorite files (Favorites page, star buttons). Kept in step with Rename/Move/Delete done through the site.
 IF OBJECT_ID('dbo.Favorites', 'U') IS NULL
 CREATE TABLE dbo.Favorites (

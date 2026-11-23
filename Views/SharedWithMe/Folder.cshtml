@@ -1,0 +1,73 @@
+@model MediaManager.Controllers.SharedWithMeController.SharedFolderView
+@{
+    ViewBag.Title = Model.Crumbs.Last().Item1;
+}
+
+@* Where you are, from the shared folder down (never above it) *@
+<p class="crumbs">
+    @Html.ActionLink("Shared with me", "Index", "SharedWithMe")
+    @for (int i = 0; i < Model.Crumbs.Count; i++)
+    {
+        <span class="crumb-sep">&rsaquo;</span>
+        if (i < Model.Crumbs.Count - 1)
+        {
+            <a href="@Url.FolderLink("Folder", "SharedWithMe", Model.Crumbs[i].Item2)">@Model.Crumbs[i].Item1</a>
+        }
+        else
+        {
+            <strong>@Model.Crumbs[i].Item1</strong>
+        }
+    }
+</p>
+
+<h2 style="word-break:break-word;">@ViewBag.Title</h2>
+<h4>@Model.TotalFiles file@(Model.TotalFiles == 1 ? "" : "s")</h4>
+
+@if (Model.Subfolders.Any())
+{
+    <div style="margin-bottom:15px;">
+        @foreach (var s in Model.Subfolders)
+        {
+            <a class="shared-chip" href="@Url.FolderLink("Folder", "SharedWithMe", Model.Folder + "/" + s)">&#128193; @s</a>
+        }
+    </div>
+}
+
+<div style="text-align:center;">
+    @foreach (var f in Model.Files)
+    {
+        <div class="media-item" style="margin-bottom:25px; border-bottom:1px solid #555; padding-bottom:15px;">
+            <h4 style="word-break:break-all;">@f.FileName</h4>
+            @* Filled in by media-common.js (picture, video / audio player, or document preview) *@
+            <div class="media-player" data-src="@f.Url" data-file="@f.FileName" data-thumb="@f.ThumbUrl" data-compact="true" data-max-height="600px"></div>
+            <div style="margin-top:8px;">
+                <a href="@f.Url" target="_blank">Open</a> &middot;
+                <a href="@f.Url" download="@f.FileName">Download</a>
+            </div>
+        </div>
+    }
+</div>
+
+@if (Model.PageCount > 1)
+{
+    string pageBase = Url.FolderLink("Folder", "SharedWithMe", Model.Folder) + "&page=";
+    <div style="text-align:center; margin:20px 0;">
+        @if (Model.Page > 1) { <a class="btn btn-default" href="@(pageBase + (Model.Page - 1))">&larr; Previous</a> }
+        <span style="margin:0 12px;">Page @Model.Page of @Model.PageCount</span>
+        @if (Model.Page < Model.PageCount) { <a class="btn btn-default" href="@(pageBase + (Model.Page + 1))">Next &rarr;</a> }
+    </div>
+}
+
+
+<div id="toast" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:10px 16px; border-radius:6px; background:#333; color:#fff; z-index:2000;"></div>
+
+<style>
+    .crumbs { margin: 10px 0 0; word-break: break-word; }
+    .crumb-sep { margin: 0 6px; opacity: .6; }
+    .shared-chip { display: inline-block; margin: 3px; padding: 5px 10px; border-radius: 14px; border: 1px solid #777;
+                   text-decoration: none !important; word-break: break-word; }
+</style>
+
+@section scripts {
+    <script src="@Url.Versioned("~/Scripts/media-common.js")"></script>
+}
