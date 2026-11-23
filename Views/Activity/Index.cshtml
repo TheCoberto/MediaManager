@@ -32,6 +32,29 @@
     Recycle Bin changes, logins, and anything that went wrong on the server. Kept for @ActivityLog.KeepDays days.
 </p>
 
+@if (TempData["SignOutMessage"] != null)
+{
+    <div class="alert alert-success">@TempData["SignOutMessage"]</div>
+}
+@if (TempData["SignOutError"] != null)
+{
+    <div class="alert alert-danger">@TempData["SignOutError"]</div>
+}
+
+@using (Html.BeginForm("SignOutEverywhere", "Activity", FormMethod.Post, new { style = "margin-bottom:10px;",
+    onsubmit = "return confirm('Log out every other device, and any guests? They will have to enter the password again. You stay logged in here.');" }))
+{
+    @Html.AntiForgeryToken()
+    <button type="submit" class="btn btn-default btn-sm"
+            title="Ends every login on every other device, owner and guests. Use it if a device is lost or a password got out (and change that password too).">
+        Log out all other devices
+    </button>
+    if (MediaAccess.SignedOutBeforeUtc != DateTime.MinValue)
+    {
+        <small style="opacity:.75; margin-left:8px;">Last done @MediaAccess.SignedOutBeforeUtc.ToLocalTime().ToString("MMM d, HH:mm")</small>
+    }
+}
+
 <style>
     .act-filters { margin: 10px 0 15px; display: flex; gap: 8px; flex-wrap: wrap; }
     .act-filters a { padding: 4px 12px; border: 1px solid rgba(127,127,127,.5); border-radius: 14px; text-decoration: none; }

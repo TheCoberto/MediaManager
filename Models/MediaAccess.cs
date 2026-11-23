@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Web;
@@ -28,6 +29,101 @@ namespace MediaManager.Models
             public string Role { get; set; }
             public DateTime ExpiresUtc { get; set; }
             public int TimeoutMinutes { get; set; }
+            /// <summary>When this login started (kept as the pass is renewed). MinValue for passes made before this was recorded.</summary>
+            public DateTime LoggedInUtc { get; set; }
+        }
+
+        // ---- Sign out everywhere ----
+        // The owner can end every login on every device (Activity page). Logins that started before that moment
+        // stop working: their passes are refused here, and AuthFilter drops their sessions. The moment is kept in
+        // a hidden file in the media folder (like the hidden-names key), so a restart or deploy doesn't undo it.
+
+        public const string SignedOutFileName = ".signed-out-at";
+
+        private static readonly object signOutLock = new object();
+        private static DateTime? signedOutBeforeUtc; // null = not read from the file yet
+
+        /// <summary>Logins that started before this are no longer valid (MinValue = never signed out everywhere).</summary>
+        public static DateTime SignedOutBeforeUtc
+        {
+            get
+            {
+                lock (signOutLock)
+                {
+                    if (signedOutBeforeUtc == null)
+                    {
+                        DateTime value = DateTime.MinValue;
+                        try
+                        {
+                            string path = SignedOutPath;
+                            if (path != null && File.Exists(path)
+                                && long.TryParse(File.ReadAllText(path).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out long ticks)
+                                && ticks > 0 && ticks <= DateTime.MaxValue.Ticks)
+                                value = new DateTime(ticks, DateTimeKind.Utc);
+                        }
+                        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                        {
+                            System.Diagnostics.Trace.TraceWarning("Couldn't read " + SignedOutFileName + ": " + ex.Message);
+                        }
+                        signedOutBeforeUtc = value;
+                    }
+                    return signedOutBeforeUtc.Value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ends every login that started before now, on every device, then gives this browser a new login so the
+        /// owner who pressed the button stays logged in. Returns false (and changes nothing) if the time couldn't
+        /// be saved.
+        /// </summary>
+        public static bool SignOutEverywhere(HttpContextBase context, string keepRole, int timeoutMinutes, out string error)
+        {
+            error = null;
+            DateTime now = DateTime.UtcNow;
+            lock (signOutLock)
+            {
+                try
+                {
+                    string path = SignedOutPath ?? throw new IOException("The media folder isn't set up.");
+                    if (File.Exists(path))
+                        File.SetAttributes(path, FileAttributes.Normal);
+                    File.WriteAllText(path, now.Ticks.ToString(CultureInfo.InvariantCulture));
+                    File.SetAttributes(path, FileAttributes.Hidden);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    error = ex.Message;
+                    return false;
+                }
+                signedOutBeforeUtc = now;
+            }
+
+            context.Session["AuthAt"] = now.Ticks;
+            Issue(context, keepRole, timeoutMinutes, now);
+            return true;
+        }
+
+        /// <summary>Whether a session that logged in at these ticks (Session["AuthAt"]) is still allowed.</summary>
+        public static bool IsStillSignedIn(object authAtTicks)
+        {
+            DateTime before = SignedOutBeforeUtc;
+            return before == DateTime.MinValue || (authAtTicks is long ticks && ticks >= before.Ticks);
+        }
+
+        private static string SignedOutPath
+        {
+            get
+            {
+                try
+                {
+                    return Path.Combine(MediaPaths.Root, SignedOutFileName);
+                }
+                catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException)
+                {
+                    return null; // no /media virtual directory
+                }
+            }
         }
 
         // Different for each IIS site, so a pass from one site is useless on another (even on the same machine
@@ -39,14 +135,16 @@ namespace MediaManager.Models
         public static string CookieName => cookieName.Value;
 
         /// <summary>Gives the browser a new pass for this role.</summary>
-        public static void Issue(HttpContextBase context, string role, int timeoutMinutes)
+        /// <param name="loggedInUtc">When the login started: now for a new login, or the old pass's time when renewing.</param>
+        public static void Issue(HttpContextBase context, string role, int timeoutMinutes, DateTime? loggedInUtc = null)
         {
             if (timeoutMinutes < 1)
                 timeoutMinutes = 20;
 
             string payload = string.Join("|", role,
                 DateTime.UtcNow.AddMinutes(timeoutMinutes).Ticks.ToString(CultureInfo.InvariantCulture),
-                timeoutMinutes.ToString(CultureInfo.InvariantCulture));
+                timeoutMinutes.ToString(CultureInfo.InvariantCulture),
+                (loggedInUtc ?? DateTime.UtcNow).Ticks.ToString(CultureInfo.InvariantCulture));
 
             byte[] sealedBytes = MachineKey.Protect(Encoding.UTF8.GetBytes(payload), Purpose, SiteKey);
             context.Response.Cookies.Set(NewCookie(context, HttpServerUtility.UrlTokenEncode(sealedBytes)));
@@ -72,17 +170,31 @@ namespace MediaManager.Models
                 return null;
             }
 
+            // role | expires | timeout [| logged in]. Passes from before "logged in" was added have 3 parts and count
+            // as logged in long ago: fine until someone signs out everywhere.
             var parts = payload.Split('|');
-            if (parts.Length != 3
+            long loggedIn = 0;
+            if ((parts.Length != 3 && parts.Length != 4)
                 || (parts[0] != Roles.Owner && parts[0] != Roles.Guest)
                 || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out long ticks)
-                || !int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out int timeout))
+                || !int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out int timeout)
+                || (parts.Length == 4 && !long.TryParse(parts[3], NumberStyles.None, CultureInfo.InvariantCulture, out loggedIn)))
                 return null;
 
-            if (ticks <= DateTime.UtcNow.Ticks || ticks > DateTime.MaxValue.Ticks)
+            if (ticks <= DateTime.UtcNow.Ticks || ticks > DateTime.MaxValue.Ticks || loggedIn > DateTime.MaxValue.Ticks)
                 return null;
 
-            return new Pass { Role = parts[0], ExpiresUtc = new DateTime(ticks, DateTimeKind.Utc), TimeoutMinutes = timeout };
+            // Signed out everywhere after this login started
+            if (loggedIn < SignedOutBeforeUtc.Ticks)
+                return null;
+
+            return new Pass
+            {
+                Role = parts[0],
+                ExpiresUtc = new DateTime(ticks, DateTimeKind.Utc),
+                TimeoutMinutes = timeout,
+                LoggedInUtc = new DateTime(loggedIn, DateTimeKind.Utc)
+            };
         }
 
         /// <summary>
@@ -93,14 +205,20 @@ namespace MediaManager.Models
         {
             var pass = Read(context);
             if (pass == null || pass.Role != role || IsOld(pass))
-                Issue(context, role, timeoutMinutes);
+                Issue(context, role, timeoutMinutes, SessionLoggedIn(context) ?? pass?.LoggedInUtc);
         }
 
         /// <summary>Extends a valid pass that's more than half used up (e.g. while a long video keeps loading).</summary>
         public static void RenewIfOld(HttpContextBase context, Pass pass)
         {
             if (IsOld(pass))
-                Issue(context, pass.Role, pass.TimeoutMinutes);
+                Issue(context, pass.Role, pass.TimeoutMinutes, pass.LoggedInUtc);
+        }
+
+        // When this browser's session logged in (Session["AuthAt"], set by AuthFilter), if it has one
+        private static DateTime? SessionLoggedIn(HttpContextBase context)
+        {
+            return context.Session?["AuthAt"] is long ticks ? new DateTime(ticks, DateTimeKind.Utc) : (DateTime?)null;
         }
 
         /// <summary>Logout: removes the pass.</summary>

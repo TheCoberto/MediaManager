@@ -28,5 +28,26 @@ namespace MediaManager.Controllers
                 return View(new System.Collections.Generic.List<ActivityLog.Entry>());
             }
         }
+
+        /// <summary>
+        /// Ends every login on every other device, owner and guests (a lost phone, a password that got out).
+        /// This browser gets a new login, so you stay logged in here.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult SignOutEverywhere()
+        {
+            if (MediaAccess.SignOutEverywhere(HttpContext, Roles.Owner, SiteSettings.LoginMinutes, out string error))
+            {
+                ActivityLog.Write(ActivityLog.Login, "Logged out all other devices: they have to log in again.");
+                TempData["SignOutMessage"] = "Done. Every other device, and any guest, has to log in again.";
+            }
+            else
+            {
+                ActivityLog.Error(ActivityLog.Login, "Log out all other devices failed: " + error);
+                TempData["SignOutError"] = "Couldn't log out the other devices: " + error;
+            }
+            return RedirectToAction("Index");
+        }
     }
 }
