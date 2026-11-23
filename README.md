@@ -43,7 +43,7 @@ set of features (for example a family media site and a separate private one).
   cleared when it's deleted.
 - **Recycle Bin**: deleted files go to `<media folder>\.recycle` and can be restored or deleted for good.
 - **Bulk download**: a whole folder, the selected files, or all favorites as one ZIP.
-- **Guest login** (optional): a second password that can only see and upload images in one folder.
+- **Guest login** (optional): a second password that can see and upload images in one folder, and browse folders you share with guests.
 - **Downloaders** (optional, off by default): save audio or video from a link using yt-dlp. Turn on with
   `Feature:Downloaders` in Site.config.
 - **Storage Random** (optional, off by default): shows a random picture, video or audio file from the
@@ -176,8 +176,10 @@ Then browse to `http://<pc-name>:8080/` from a phone or laptop on the same netwo
 
 **Who can log in**
 - **Owner** (`LoginPasswordHash`): everything.
-- **Guest** (`GuestPasswordHash`, optional): only the Uploads pages. Guests can see and upload images in
-  `ImageUploadFolder` (default `Guest Uploads`) and can't open any other file.
+- **Guest** (`GuestPasswordHash`, optional): the Uploads pages and *Shared with me*. Guests can see and upload
+  images in `ImageUploadFolder` (default `Guest Uploads`), and view / download (read-only) anything in a folder
+  the owner shared with the **Share with guests** button on its Gallery page (subfolders included). They
+  can't open any other file.
 
 **How passwords are stored.** Site.config holds a PBKDF2-SHA256 hash (210,000 rounds, random salt) made by
 `deploy\New-PasswordHash.ps1`, never the password itself. Older sites may still have a plain SHA-256 hex

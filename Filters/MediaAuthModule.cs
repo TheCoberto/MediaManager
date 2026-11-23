@@ -91,7 +91,13 @@ namespace MediaManager.Filters
 
             string guestFolder = MediaPaths.NormalizeFolder(SiteSettings.ImageUploadFolder);
             string guestRoot = guestFolder.Length == 0 ? MediaPaths.VirtualRoot : MediaPaths.VirtualRoot + "/" + guestFolder;
-            return path.StartsWith(guestRoot + "/", StringComparison.OrdinalIgnoreCase);
+            if (path.StartsWith(guestRoot + "/", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // A file in a folder the owner shared with guests, or below one: "~/media/a/b/file.jpg" -> folder "a/b"
+            string relative = path.Substring(MediaPaths.VirtualRoot.Length).TrimStart('/');
+            int slash = relative.LastIndexOf('/');
+            return slash > 0 && SharedFolders.IsShared(relative.Substring(0, slash));
         }
 
         /// <summary>True if path is the folder itself or anything inside it (case-insensitive, like Windows paths).</summary>

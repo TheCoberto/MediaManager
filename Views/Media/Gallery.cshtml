@@ -73,6 +73,15 @@
     <button id="downloadFolderBtn" title="Download everything in this folder as one ZIP">&#11015; Download folder</button>
     <button type="button" title="Find files in this folder (and its subfolders) that are exact copies of each other"
             onclick="location.href='@Url.FolderLink("Index", "Duplicates", (string)ViewBag.Folder)'">&#128203; Find duplicates</button>
+    @if (ViewBag.GuestLogin == true)
+    {
+        bool sharedDirectly = ViewBag.SharedDirectly == true;
+        bool sharedByParent = ViewBag.Shared == true && !sharedDirectly;
+        <button id="shareFolderBtn" data-shared="@(sharedDirectly ? "true" : "false")" @(sharedByParent ? "disabled" : "")
+                title="@(sharedByParent ? "Guests can already see this: a folder above it is shared" : "Let guests see this folder and everything in it (read-only), under 'Shared with me'")">
+            @(sharedDirectly ? "\U0001F465 Stop sharing with guests" : sharedByParent ? "\U0001F465 Shared (by a folder above)" : "\U0001F465 Share with guests")
+        </button>
+    }
     <button id="deleteFolderBtn"
             title="Delete this folder: empty folders are removed, anything else goes to the Recycle Bin">&#128465; Delete folder</button>
 </div>
@@ -705,6 +714,21 @@
                     }, () => T.idle($btn));
                 })
                 .fail(xhr => { if (xhr.status !== 401) alert("Couldn't check the folder (" + xhr.status + ")."); });
+        });
+
+        // ---------- share this folder with guests ----------
+        $('#shareFolderBtn').on('click', function () {
+            const $btn = $(this);
+            const share = $btn.attr('data-shared') !== 'true';
+            if (share && !confirm('Let guests see everything in this folder (and its subfolders)?\n\nThey can view and download, but not change anything.')) return;
+            T.busy($btn, share ? 'Sharing...' : 'Stopping...');
+            T.post('@Url.Action("Set", "SharedWithMe")', { folder, shared: share }).then(res => {
+                T.idle($btn);
+                $btn.attr('data-shared', res.shared ? 'true' : 'false')
+                    .text(res.shared ? '\u{1F465} Stop sharing with guests'
+                        : res.sharedByParent ? '\u{1F465} Shared (by a folder above)' : '\u{1F465} Share with guests')
+                    .prop('disabled', !res.shared && res.sharedByParent);
+            }, () => T.idle($btn));
         });
 
         $(document).on("click", ".deleteBtn", function () {

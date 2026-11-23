@@ -45,6 +45,8 @@
                     <ul class="nav navbar-nav">
                         <li>@Html.ActionLink("Uploads", "ImageViewAll", "Images")</li>
                         <li>@Html.ActionLink("Upload an image", "ImageAdd", "Images")</li>
+                        <li>@Html.ActionLink("Shared with me", "Index", "SharedWithMe")</li>
+                        <li>@Html.ActionLink("Guestbook", "Index", "Guestbook")</li>
                     </ul>
                 }
                 else
@@ -61,6 +63,10 @@
                     @if (MediaManager.Models.SiteSettings.ImagesEnabled)
                     {
                         <li>@Html.ActionLink("Guest Uploads", "ImageManager", "Images")</li>
+                    }
+                    @if (MediaManager.Models.SiteSettings.GuestPasswordHash != null)
+                    {
+                        <li>@Html.ActionLink("Guestbook", "Index", "Guestbook")</li>
                     }
                     @if (MediaManager.Models.SiteSettings.DownloadersEnabled)
                     {

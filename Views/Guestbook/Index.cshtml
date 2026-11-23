@@ -1,0 +1,67 @@
+@model List<MediaManager.Models.GuestbookEntry>
+@{
+    ViewBag.Title = "Guestbook";
+    bool isGuest = MediaManager.Models.Roles.IsGuest(Session);
+}
+
+<h2>Guestbook</h2>
+<p style="opacity:.8;">@(isGuest ? "Leave a message for the owner, or just say hi." : "Messages from your guests. You can reply here too.")</p>
+
+@if (TempData["GuestbookError"] != null)
+{
+    <p class="text-danger">@TempData["GuestbookError"]</p>
+}
+
+@using (Html.BeginForm("Sign", "Guestbook", FormMethod.Post, new { @class = "gb-form" }))
+{
+    @Html.AntiForgeryToken()
+    <input type="text" name="name" value="@ViewBag.Name" maxlength="@MediaManager.Models.Guestbook.MaxName"
+           placeholder="@(isGuest ? "Your name" : "Owner")" class="form-control" />
+    <textarea name="message" rows="3" maxlength="@MediaManager.Models.Guestbook.MaxMessage" required
+              placeholder="Write a message..." class="form-control"></textarea>
+    <button type="submit" class="btn btn-primary">Sign the guestbook</button>
+}
+
+@if (!Model.Any())
+{
+    <p style="opacity:.8; margin-top:20px;">No messages yet. Be the first!</p>
+}
+
+<div class="gb-list">
+    @foreach (var e in Model)
+    {
+        <div class="gb-entry @(e.Role == MediaManager.Models.Roles.Owner ? "gb-owner" : "")">
+            <div class="gb-head">
+                <strong>@e.Name</strong>
+                @if (e.Role == MediaManager.Models.Roles.Owner)
+                {
+                    <span class="gb-badge">owner</span>
+                }
+                <span class="gb-time">@e.CreatedAt.ToString("d MMM yyyy, HH:mm")</span>
+                @if (!isGuest)
+                {
+                    using (Html.BeginForm("Delete", "Guestbook", new { id = e.EntryId }, FormMethod.Post, new { @class = "gb-del", onsubmit = "return confirm('Delete this message?');" }))
+                    {
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-link btn-xs" title="Delete this message">&#128465;</button>
+                    }
+                }
+            </div>
+            <div class="gb-msg">@e.Message</div>
+        </div>
+    }
+</div>
+
+<style>
+    .gb-form { max-width: 600px; margin: 15px 0 25px; display: flex; flex-direction: column; gap: 8px; }
+    .gb-form .form-control { max-width: none; }
+    .gb-form button { align-self: flex-start; }
+    .gb-list { max-width: 700px; }
+    .gb-entry { border: 1px solid rgba(127,127,127,.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+    .gb-owner { border-color: #2a7ae2; }
+    .gb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .gb-badge { font-size: 11px; padding: 1px 7px; border-radius: 9px; background: #2a7ae2; color: #fff; }
+    .gb-time { opacity: .7; font-size: 12px; }
+    .gb-del { margin-left: auto; display: inline; }
+    .gb-msg { margin-top: 6px; white-space: pre-wrap; word-break: break-word; }
+</style>

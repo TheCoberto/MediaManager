@@ -155,6 +155,10 @@
     <Compile Include="Models\LibraryIndex.cs" />
     <Compile Include="Models\MediaPaths.cs" />
     <Compile Include="Models\Favorites.cs" />
+    <Compile Include="Models\SharedFolders.cs" />
+    <Compile Include="Models\Guestbook.cs" />
+    <Compile Include="Controllers\GuestbookController.cs" />
+    <Compile Include="Controllers\SharedWithMeController.cs" />
     <Compile Include="Models\FlaggedFile.cs" />
     <Compile Include="Models\Flags.cs" />
     <Compile Include="Models\Thumbnails.cs" />
@@ -217,6 +221,9 @@
     <Content Include="Views\Shared\Error.cshtml" />
     <Content Include="Views\Shared\_Layout.cshtml" />
     <Content Include="Views\Home\Index.cshtml" />
+    <Content Include="Views\SharedWithMe\Index.cshtml" />
+    <Content Include="Views\SharedWithMe\Folder.cshtml" />
+    <Content Include="Views\Guestbook\Index.cshtml" />
     <Content Include="Views\Images\ImageAdd.cshtml" />
     <Content Include="Views\Images\ImageViewAll.cshtml" />
     <Content Include="Views\Images\ImageManager.cshtml" />

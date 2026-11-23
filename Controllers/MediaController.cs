@@ -44,6 +44,10 @@ namespace MediaManager.Controllers
 
             ViewBag.Folder = folder;
             ViewBag.Subfolders = GetSubfolders(MediaPaths.ResolveFolder(folder));
+            // "Share with guests" button: only on sites that have a guest login
+            ViewBag.GuestLogin = SiteSettings.GuestPasswordHash != null;
+            ViewBag.SharedDirectly = SharedFolders.IsSharedDirectly(folder);
+            ViewBag.Shared = SharedFolders.IsShared(folder);
             return View("Gallery");
         }
 

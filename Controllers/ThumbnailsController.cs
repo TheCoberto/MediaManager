@@ -23,9 +23,12 @@ namespace MediaManager.Controllers
         /// The URL carries a version (v) that changes with the file, so the browser may keep it for a long time.
         /// </summary>
         /// <param name="f">A hidden-name link's token, in place of folder + file (Models/HiddenNames.cs).</param>
+        [GuestAllowed] // but only for files in shared folders (checked below)
         public async Task<ActionResult> Get(string folder, string file, string f = null)
         {
             if (f != null && !HiddenNames.TryDecodeFile(f, out folder, out file))
+                return HttpNotFound();
+            if (Roles.IsGuest(Session) && !SharedFolders.IsShared(folder))
                 return HttpNotFound();
 
             string path = MediaPaths.ResolveFile(folder, file);

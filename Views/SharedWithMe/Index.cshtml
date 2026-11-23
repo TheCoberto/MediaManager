@@ -1,0 +1,29 @@
+@model List<string>
+@{
+    ViewBag.Title = "Shared with me";
+}
+
+<h2>Shared with me</h2>
+
+@if (!Model.Any())
+{
+    <p style="opacity:.8;">Nothing has been shared with guests yet.</p>
+}
+else
+{
+    <p style="opacity:.8;">Folders the owner has shared with you. Open one to view, play or download what's inside.</p>
+    <div class="shared-list">
+        @foreach (var folder in Model)
+        {
+            string name = folder.Substring(folder.LastIndexOf('/') + 1);
+            <a class="shared-chip" href="@Url.FolderLink("Folder", "SharedWithMe", folder)">&#128193; @name</a>
+        }
+    </div>
+}
+
+<style>
+    .shared-list { margin-top: 15px; }
+    .shared-chip { display: inline-block; margin: 5px; padding: 10px 16px; border-radius: 16px; border: 1px solid #777;
+                   text-decoration: none !important; word-break: break-word; }
+    .shared-chip:hover { background: rgba(128,128,128,.2); }
+</style>
