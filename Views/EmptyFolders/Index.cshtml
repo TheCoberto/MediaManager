@@ -10,7 +10,7 @@
 <p style="opacity:.8;">
     Finds folders with nothing in them (or only files Windows makes by itself, like Thumbs.db and desktop.ini), and
     folders whose files aren't photos, videos, audio or documents, which the Gallery shows as empty.
-    Looking for copies of the same file instead? Try @Html.ActionLink("Duplicates", "Index", "Duplicates", new { folder }, null).
+    Looking for copies of the same file instead? Try <a href="@Url.FolderLink("Index", "Duplicates", folder)">Duplicates</a>.
 </p>
 
 @Html.Partial("_MediaTools")
@@ -63,7 +63,7 @@
                 {
                     <li data-folder="@f">
                         <input type="checkbox" class="efTick" checked title="Tick to delete" />
-                        <a href="@Url.Action("Gallery", "Media", new { folder = f })" target="_blank" rel="noopener"
+                        <a href="@Url.GalleryLink(f)" target="_blank" rel="noopener"
                            title="Open this folder in a new tab, to check it's empty">@f</a>
                     </li>
                 }

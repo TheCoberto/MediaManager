@@ -24,8 +24,12 @@ namespace MediaManager.Controllers
         /// <summary>Most groups sent to the page: past this, delete some and scan again.</summary>
         private const int MaxGroups = 1000;
 
-        public ActionResult Index(string folder = "")
+        /// <param name="f">A hidden-name link's token, in place of folder (Models/HiddenNames.cs).</param>
+        public ActionResult Index(string folder = "", string f = null)
         {
+            if (f != null && (folder = HiddenNames.Decode(f)) == null)
+                return HttpNotFound();
+
             folder = MediaPaths.NormalizeFolder(folder);
             if (MediaPaths.ResolveFolder(folder) == null || !Directory.Exists(MediaPaths.ResolveFolder(folder)))
                 return HttpNotFound();
@@ -106,6 +110,7 @@ namespace MediaManager.Controllers
                 size = info.Length,
                 modified = info.LastWriteTime.ToString("yyyy-MM-dd HH:mm"),
                 url = MediaPaths.UrlFor(relative),
+                view = Url.ViewLink(folder, info.Name),
                 thumb = Thumbnails.UrlFor(Url, folder, info.Name, info),
                 kind = MediaPaths.KindOf(info.Name)
             };

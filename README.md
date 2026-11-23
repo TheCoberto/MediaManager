@@ -48,6 +48,8 @@ set of features (for example a family media site and a separate private one).
   `Feature:Downloaders` in Site.config.
 - **Storage Random** (optional, off by default): shows a random picture, video or audio file from the
   whole media folder, or from one folder.
+- **Hidden names** (optional, off by default): links to folders and files show a scrambled code instead of
+  their names. Turn on with `Feature:HideNames` in Site.config.
 
 ## How it fits together
 
@@ -223,6 +225,26 @@ it by re-saving `Web.config` in the same folder.
 | `Feature:Images` | `true` | The Uploads / Guest Uploads pages (and with them the guest login's pages). |
 | `Feature:Downloaders` | `false` | Audio and Video Downloader (needs `yt-dlp.exe` in `ToolsFolder`). |
 | `Feature:StorageRandom` | `false` | Storage Random page. |
+| `Feature:HideNames` | `false` | Hide folder and file names in links (see [Hidden names](#hidden-names)). |
+
+### Hidden names
+
+With `Feature:HideNames` on, links to a folder's Gallery, a file's View and Storage Random pages, the files
+themselves, thumbnails, Find duplicates and folder ZIPs carry a scrambled code (`/Media/Gallery?f=…`,
+`/m/…`) instead of the names. Then the names don't show in the address bar, browser history, bookmarks,
+links you share, or the server's logs. The pages still show the names, and the page's background requests
+still send them.
+
+- Each code is the file's or folder's path encrypted with the site's own key. The same file always gets the
+  same code, so bookmarks keep working and browsers can still cache files. Renaming or moving a file gives
+  it a new code, just as it changes a readable link.
+- The key is made the first time it's needed and kept, hidden, as `.hidden-names.key` in the media folder
+  (the site can't write to its own app folder). It's never served. If it's deleted, a new one is made and
+  bookmarked hidden links stop working.
+- Readable links still work. With the setting on, a readable Gallery, View or Storage Random link goes on to
+  the hidden one. Turning the setting off again keeps hidden links working, as long as the key is still there.
+- `/m/…` links are turned back into `/media/…` paths before the login check runs (`Filters\MediaAuthModule.cs`),
+  so guests are limited exactly as before, and IIS still serves the file itself (with video seeking).
 
 ## Updating a site
 

@@ -36,22 +36,28 @@ namespace MediaManager.Controllers
                 files = here.Count,
                 size = FileViewModel.FormatFileSize(TotalSize(here)),
                 withSubfoldersFiles = all.Count,
-                withSubfoldersSize = FileViewModel.FormatFileSize(TotalSize(all))
+                withSubfoldersSize = FileViewModel.FormatFileSize(TotalSize(all)),
+                // The download link (add "&subfolders=true" for everything); a token on a site that hides names
+                link = Url.FolderLink("Folder", "BulkDownload", folder)
             }, JsonRequestBehavior.AllowGet);
         }
 
         /// <summary>Every file in a folder (and optionally its subfolders, keeping their folder structure).</summary>
-        public ActionResult Folder(string folder, bool subfolders = false)
+        /// <param name="f">A hidden-name link's token, in place of folder (Models/HiddenNames.cs).</param>
+        public ActionResult Folder(string folder, bool subfolders = false, string f = null)
         {
+            if (f != null && (folder = HiddenNames.Decode(f)) == null)
+                return HttpNotFound();
+
             string path = ResolveFolder(folder);
             if (path == null)
                 return HttpNotFound();
 
             string root = path.TrimEnd('\\') + "\\";
-            var items = MediaPaths.GetMediaFiles(path, subfolders).Select(f => new ZipDownload.Item
+            var items = MediaPaths.GetMediaFiles(path, subfolders).Select(p => new ZipDownload.Item
             {
-                FullPath = f,
-                ZipPath = f.Substring(root.Length).Replace('\\', '/')
+                FullPath = p,
+                ZipPath = p.Substring(root.Length).Replace('\\', '/')
             });
 
             ZipDownload.Send(HttpContext, Path.GetFileName(path.TrimEnd('\\')) + ".zip", items);

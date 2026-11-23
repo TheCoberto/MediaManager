@@ -54,6 +54,9 @@ namespace MediaManager.Models
         // Off unless turned on:
         public static bool StorageRandomEnabled => IsFeatureEnabled("StorageRandom", false);
 
+        /// <summary>Links to folders and files carry a token instead of their names (Models/HiddenNames.cs).</summary>
+        public static bool HideNamesEnabled => IsFeatureEnabled("HideNames", false);
+
         /// <summary>Audio + Video Downloader (yt-dlp). Off by default: turn on per site in Site.config.</summary>
         public static bool DownloadersEnabled => IsFeatureEnabled("Downloaders", false);
 

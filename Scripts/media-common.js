@@ -628,12 +628,50 @@
         a.remove();
     }
 
+    // Readable links. On a site that hides names these still work (the server sends them on to the hidden link),
+    // but the names pass through the address bar on the way: use links() / go() instead.
     function viewUrl(folder, file) {
         return URLS.view + "?folder=" + encodeURIComponent(folder) + "&file=" + encodeURIComponent(file);
     }
 
     function galleryUrl(folder) {
         return URLS.gallery + "?folder=" + encodeURIComponent(folder);
+    }
+
+    // Links for a folder, or a file in it: a Promise of { gallery, view, url (the file itself), random (its Storage
+    // Random page, on a site that hides names) }. A site that hides names (Models/HiddenNames.cs) makes them on the
+    // server, since only it can make the tokens; otherwise they're made right here.
+    function links(folder, file, within) {
+        folder = normalizeFolder(folder);
+        if (!URLS.hideNames) {
+            var hasFile = file != null && file !== "";
+            var path = (folder ? folder + "/" : "") + (hasFile ? file : "");
+            return Promise.resolve({
+                gallery: galleryUrl(folder),
+                view: hasFile ? viewUrl(folder, file) : null,
+                url: hasFile ? URLS.mediaRoot + "/" + path.split("/").map(encodeURIComponent).join("/") : null,
+                random: null
+            });
+        }
+        var data = { folder: folder };
+        if (file != null && file !== "") data.file = file;
+        if (within) data.within = within;
+        return post(URLS.links, data);
+    }
+
+    // Opens a file's View page, or a folder's Gallery when file is null. opts: newTab, replace (no Back to here).
+    function go(folder, file, opts) {
+        opts = opts || {};
+        // A new tab has to be opened during the click itself, or the browser blocks it as a pop-up
+        var tab = opts.newTab ? window.open("", "_blank") : null;
+        return links(folder, file).then(function (l) {
+            var href = file == null ? l.gallery : l.view;
+            if (tab) tab.location.href = href;
+            else if (opts.replace) location.replace(href);
+            else location.href = href;
+        }, function () {
+            if (tab) tab.close();
+        });
     }
 
     // ---------- video helpers ----------
@@ -784,6 +822,8 @@
         setFavorite: setFavorite,
         viewUrl: viewUrl,
         galleryUrl: galleryUrl,
+        links: links,
+        go: go,
         pauseVideosOutOfView: pauseVideosOutOfView
     };
 })(jQuery);

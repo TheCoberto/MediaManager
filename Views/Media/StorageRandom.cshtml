@@ -16,7 +16,7 @@
     bool isVideo = kind == MediaKind.Video;
     bool isAudio = kind == MediaKind.Audio;
 
-    string nextUrl = Url.Action("StorageRandom", "Media", within.Length > 0 ? new { within } : null);
+    string nextUrl = Url.RandomLink(null, null, within);
 }
 
 <h2 class="text-center">Storage Random</h2>
@@ -40,7 +40,7 @@
         <span>Picking from all@(Model != null ? " " + Model.TotalFiles.ToString("N0") : "") files</span>
         if (hasFolder)
         {
-            <a href="@Url.Action("StorageRandom", "Media", new { within = folder })" class="sr-scope-link"
+            <a href="@Url.RandomLink(null, null, folder)" class="sr-scope-link"
                title="Keep picking random files from this file's folder (and its subfolders)">Stay in this folder</a>
         }
     }
@@ -99,9 +99,9 @@ else
     <p class="text-center" style="margin-top:8px;">
         @if (hasFolder)
         {
-            @Html.ActionLink("Open folder in Gallery", "Gallery", "Media", new { folder }, null)
+            <a href="@Url.GalleryLink(folder)">Open folder in Gallery</a>
             <span style="opacity:.5;"> | </span>
-            @Html.ActionLink("Open in View", "ViewMedia", "Media", new { folder, file }, null)
+            <a href="@Url.ViewLink(folder, file)">Open in View</a>
         }
         else
         {
@@ -148,6 +148,7 @@ else
             const folder = @Html.Raw(Json.Encode(folder));
             const file = @Html.Raw(Json.Encode(file));
             const nextUrl = @Html.Raw(Json.Encode(nextUrl));
+            const within = @Html.Raw(Json.Encode(within));
 
             function goNext() { window.location.href = nextUrl; }
 
@@ -181,11 +182,12 @@ else
             $('#deleteBtn').on('click', () => T.remove(folder, file).then(goNext));
 
             // After Rename, stay on the same file under its new name
-            $('#renameBtn').on('click', () => T.rename(folder, file).then(newName => {
+            $('#renameBtn').on('click', () => T.rename(folder, file).then(newName => T.links(folder, newName, within).then(l => {
+                if (l.random) return window.location.replace(l.random); // a site that hides names
                 const u = new URL(window.location.href);
                 u.searchParams.set('file', newName);
                 window.location.replace(u.toString());
-            }));
+            }, () => { })));
 
             $('#corruptedBtn').on('click', () => T.markCorrupted(folder, file).then(() => location.reload()));
             $('#unmarkBtn').on('click', () => T.unmark(folder, file).then(() => location.reload(), () => { }));

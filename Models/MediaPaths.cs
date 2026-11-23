@@ -184,9 +184,21 @@ namespace MediaManager.Models
             return files;
         }
 
-        /// <summary>Browser URL for a media file, e.g. "a/b/my file.mp4" -> "/media/a/b/my%20file.mp4".</summary>
+        /// <summary>
+        /// Where hidden-name file links point ("/m/&lt;token&gt;"). Filters/MediaAuthModule turns one back into the
+        /// file's /media path before anything else looks at the request, so IIS still serves the file itself.
+        /// </summary>
+        public const string HiddenRoot = "~/m";
+
+        /// <summary>
+        /// Browser URL for a media file, e.g. "a/b/my file.mp4" -> "/media/a/b/my%20file.mp4", or "/m/&lt;token&gt;"
+        /// when the site hides names (Models/HiddenNames.cs).
+        /// </summary>
         public static string UrlFor(string relativePath)
         {
+            if (HiddenNames.Enabled)
+                return System.Web.VirtualPathUtility.ToAbsolute(HiddenRoot) + "/" + HiddenNames.Encode(relativePath);
+
             var segments = NormalizeFolder(relativePath)
                 .Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(Uri.EscapeDataString);

@@ -40,7 +40,7 @@
     }
     @if (Model.Folder.Length > 0)
     {
-        <span style="margin-left:10px;">(@Html.ActionLink("open in Gallery", "Gallery", "Media", new { folder = Model.Folder }, null))</span>
+        <span style="margin-left:10px;">(<a href="@Url.GalleryLink(Model.Folder)">open in Gallery</a>)</span>
     }
 </div>
 
@@ -107,7 +107,7 @@ else
             <td class="st-name">
                 @if (f.Kind != null)
                 {
-                    @Html.ActionLink(f.Name, "ViewMedia", "Media", new { folder = f.Folder, file = f.Name }, null)
+                    <a href="@Url.ViewLink(f.Folder, f.Name)">@f.Name</a>
                 }
                 else
                 {

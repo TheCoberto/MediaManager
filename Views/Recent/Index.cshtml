@@ -56,7 +56,7 @@ else
         <div class="rc-grid">
             @foreach (var i in day)
             {
-                string view = Url.Action("ViewMedia", "Media", new { folder = i.Folder, file = i.Name });
+                string view = Url.ViewLink(i.Folder, i.Name);
                 <a class="rc-item" href="@view" title="@i.Name">
                     <div class="rc-thumb">
                         @if (i.Thumb != null)

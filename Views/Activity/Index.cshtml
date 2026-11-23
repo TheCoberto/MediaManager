@@ -77,7 +77,7 @@ else
                     <td class="act-file">
                         @if (e.FileName != null && e.Folder != null)
                         {
-                            @Html.ActionLink(e.FileName, "ViewMedia", "Media", new { folder = e.Folder, file = e.FileName }, null)
+                            <a href="@Url.ViewLink(e.Folder, e.FileName)">@e.FileName</a>
                             <br /><small>@(e.Folder.Length == 0 ? "(top folder)" : e.Folder)</small>
                         }
                     </td>

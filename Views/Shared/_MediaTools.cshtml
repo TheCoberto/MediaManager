@@ -110,6 +110,9 @@
         folders: '@Url.Action("GetFolders", "Media")',
         view: '@Url.Action("ViewMedia", "Media")',
         gallery: '@Url.Action("Gallery", "Media")',
+        links: '@Url.Action("Links", "Media")',
+        mediaRoot: '@Url.Content(MediaManager.Models.MediaPaths.VirtualRoot)',
+        hideNames: @(MediaManager.Models.HiddenNames.Enabled ? "true" : "false"),
         setFavorite: '@Url.Action("Set", "Favorites")',
         removeFavorite: '@Url.Action("Remove", "Favorites")'
     };

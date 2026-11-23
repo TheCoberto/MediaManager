@@ -98,7 +98,7 @@ else
                  style="margin-bottom:25px; border-bottom:1px solid #555; padding-bottom:15px;">
                 <h4 style="word-break:break-all;">@f.FileName</h4>
                 <div style="margin-bottom:8px; opacity:.8;">
-                    in @Html.ActionLink(string.IsNullOrEmpty(f.Folder) ? "(top folder)" : f.Folder, "Gallery", "Media", new { folder = f.Folder }, null)
+                    in <a href="@Url.GalleryLink(f.Folder)">@(string.IsNullOrEmpty(f.Folder) ? "(top folder)" : f.Folder)</a>
                 </div>
                 @if (!f.Exists)
                 {
@@ -117,7 +117,7 @@ else
                 <div class="media-actions" style="margin-top:10px;">
                     @if (f.Exists)
                     {
-                        @Html.ActionLink("View", "ViewMedia", "Media", new { folder = f.Folder, file = f.FileName }, new { @class = "btn btn-default btn-sm" })
+                        <a href="@Url.ViewLink(f.Folder, f.FileName)" class="btn btn-default btn-sm">View</a>
                     }
                     else
                     {
