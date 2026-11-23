@@ -1179,25 +1179,31 @@ namespace MediaManager.Controllers
         }
 
         /// <summary>
-        /// View page's Save Snapshot: saves the video's frame at <paramref name="seconds"/> as "name (frame m-ss.fff).jpg"
-        /// next to it, full size, turned <paramref name="degrees"/> clockwise like it's shown (Models/VideoSnapshot.cs).
+        /// View page's Save Snapshot: saves what's showing as a full-size JPEG next to the file, turned
+        /// <paramref name="degrees"/> clockwise like it's shown. Videos: the frame at <paramref name="seconds"/>, as
+        /// "name (frame m-ss.fff).jpg" (Models/VideoSnapshot.cs). Pictures: the picture, as "name (snapshot).jpg"
+        /// (Models/RotatedCopy.cs; an animated GIF's first frame).
         /// seconds is a string so "12.5" reads the same whatever the server's language settings.
         /// </summary>
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<JsonResult> SaveSnapshot(string folder, string fileName, string seconds, int degrees = 0)
+        public async Task<JsonResult> SaveSnapshot(string folder, string fileName, string seconds = null, int degrees = 0)
         {
             string videoPath = MediaPaths.ResolveFile(folder, fileName);
             if (videoPath == null || !System.IO.File.Exists(videoPath))
                 return Json(new { success = false, message = "File not found." });
-            if (MediaPaths.KindOf(fileName) != MediaKind.Video)
-                return Json(new { success = false, message = "Snapshots are for videos." });
-            if (!double.TryParse(seconds, NumberStyles.Float, CultureInfo.InvariantCulture, out double at) || at < 0 || double.IsInfinity(at))
-                return Json(new { success = false, message = "Invalid time." });
 
             int? clockwise = RotatedCopy.Normalize(degrees);
             if (clockwise == null)
                 return Json(new { success = false, message = "It can only be turned in quarter turns." });
+
+            string kind = MediaPaths.KindOf(fileName);
+            if (kind == MediaKind.Image)
+                return await SavePictureSnapshot(folder, videoPath, clockwise.Value);
+            if (kind != MediaKind.Video)
+                return Json(new { success = false, message = "Snapshots are for pictures and videos." });
+            if (!double.TryParse(seconds, NumberStyles.Float, CultureInfo.InvariantCulture, out double at) || at < 0 || double.IsInfinity(at))
+                return Json(new { success = false, message = "Invalid time." });
 
             string name = Path.GetFileName(videoPath);
             string directory = Path.GetDirectoryName(videoPath);
@@ -1211,6 +1217,23 @@ namespace MediaManager.Controllers
 
             InvalidateFolderCache(folder);
             ActivityLog.Write(ActivityLog.Copy, "Snapshot of " + name + " at " + at.ToString("0.000", CultureInfo.InvariantCulture) + "s.", folder, newName);
+            return Json(new { success = true, newName });
+        }
+
+        private async Task<JsonResult> SavePictureSnapshot(string folder, string picturePath, int clockwise)
+        {
+            string name = Path.GetFileName(picturePath);
+            string directory = Path.GetDirectoryName(picturePath);
+            string newName = FreeName(directory, Path.GetFileNameWithoutExtension(name) + " (snapshot).jpg");
+            string error = await RotatedCopy.MakeAsync(picturePath, Path.Combine(directory, newName), clockwise);
+            if (error != null)
+            {
+                ActivityLog.Error(ActivityLog.Copy, "Couldn't save a snapshot: " + error, folder, name);
+                return Json(new { success = false, message = error });
+            }
+
+            InvalidateFolderCache(folder);
+            ActivityLog.Write(ActivityLog.Copy, "Snapshot of " + name + (clockwise == 0 ? "" : ", turned " + clockwise + "° clockwise") + ".", folder, newName);
             return Json(new { success = true, newName });
         }
     }

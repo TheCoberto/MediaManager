@@ -61,8 +61,10 @@ namespace MediaManager.Models
         }
 
         /// <summary>
-        /// Writes <paramref name="sourcePath"/> turned <paramref name="clockwise"/> degrees (90, 180 or 270) to
-        /// <paramref name="targetPath"/>. Returns null when it worked, or why it didn't (nothing is left behind then).
+        /// Writes <paramref name="sourcePath"/> turned <paramref name="clockwise"/> degrees (0, 90, 180 or 270) to
+        /// <paramref name="targetPath"/>, in the format its extension names. A picture's Save Snapshot is this with a
+        /// ".jpg" target: the picture as it's shown, as a JPEG (an animated GIF's first frame).
+        /// Returns null when it worked, or why it didn't (nothing is left behind then).
         /// </summary>
         public static async Task<string> MakeAsync(string sourcePath, string targetPath, int clockwise)
         {
@@ -101,30 +103,45 @@ namespace MediaManager.Models
             try
             {
                 using (var stream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-                using (var image = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: true))
+                using (var original = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: true))
                 {
-                    if (image.RawFormat.Guid == ImageFormat.Gif.Guid && image.GetFrameCount(FrameDimension.Time) > 1)
+                    bool animated = original.RawFormat.Guid == ImageFormat.Gif.Guid && original.GetFrameCount(FrameDimension.Time) > 1;
+                    bool toJpeg = ext == ".jpg" || ext == ".jpeg";
+                    if (animated && !toJpeg)
                         return "Animated GIFs can't be rotated (only the first frame would be kept).";
 
-                    // Upright first, the way the browser shows it, then the turn asked for
-                    var upright = Thumbnails.RotationFor(image);
-                    if (upright != RotateFlipType.RotateNoneFlipNone)
-                        image.RotateFlip(upright);
-                    image.RotateFlip(TurnFor(clockwise));
-                    ResetOrientation(image);
+                    // A JPEG of a transparent or animated picture: its first frame on white (JPEG has no transparency,
+                    // and see-through parts would come out black)
+                    bool flatten = toJpeg && (animated || Image.IsAlphaPixelFormat(original.PixelFormat));
+                    var image = flatten ? Flatten(original) : original;
 
-                    if (ext == ".png")
-                        image.Save(targetPath, ImageFormat.Png);
-                    else if (ext == ".gif")
-                        image.Save(targetPath, ImageFormat.Gif);
-                    else
+                    // Upright first, the way the browser shows it, then the turn asked for
+                    try
                     {
-                        var jpeg = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                        using (var parameters = new EncoderParameters(1))
+                        var upright = Thumbnails.RotationFor(image);
+                        if (upright != RotateFlipType.RotateNoneFlipNone)
+                            image.RotateFlip(upright);
+                        image.RotateFlip(TurnFor(clockwise));
+                        ResetOrientation(image);
+
+                        if (ext == ".png")
+                            image.Save(targetPath, ImageFormat.Png);
+                        else if (ext == ".gif")
+                            image.Save(targetPath, ImageFormat.Gif);
+                        else
                         {
-                            parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, JpegQuality);
-                            image.Save(targetPath, jpeg, parameters);
+                            var jpeg = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                            using (var parameters = new EncoderParameters(1))
+                            {
+                                parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, JpegQuality);
+                                image.Save(targetPath, jpeg, parameters);
+                            }
                         }
+                    }
+                    finally
+                    {
+                        if (flatten)
+                            image.Dispose();
                     }
                 }
                 return null;
@@ -135,6 +152,24 @@ namespace MediaManager.Models
                 TryDelete(targetPath);
                 return await MakeImageWithFfmpegAsync(sourcePath, targetPath, clockwise).ConfigureAwait(false);
             }
+        }
+
+        /// <summary>The picture's current (first) frame drawn on white, keeping its details (date taken, orientation note...).</summary>
+        private static Bitmap Flatten(Image image)
+        {
+            var bitmap = new Bitmap(image.Width, image.Height, PixelFormat.Format24bppRgb);
+            bitmap.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                g.Clear(Color.White);
+                g.DrawImage(image, new Rectangle(0, 0, image.Width, image.Height));
+            }
+            foreach (var item in image.PropertyItems)
+            {
+                try { bitmap.SetPropertyItem(item); }
+                catch (ArgumentException) { } // one Windows can't copy; the picture itself is what matters
+            }
+            return bitmap;
         }
 
         private static RotateFlipType TurnFor(int clockwise)
