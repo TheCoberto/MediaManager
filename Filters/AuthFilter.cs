@@ -1,4 +1,5 @@
 ﻿using MediaManager.Models;
+using System;
 using System.Web.Mvc;
 using System.Web.Routing;
 
@@ -15,6 +16,10 @@ namespace MediaManager.Filters
             if (http.Session["Auth"] != null && !MediaAccess.IsStillSignedIn(http.Session["AuthAt"]))
                 http.Session.Clear();
 
+            // This device was logged out from the Activity page's "Logged in now" list: same.
+            if (http.Session["Auth"] != null && ActiveLogins.IsRevoked(http.Session["LoginId"] as string))
+                http.Session.Clear();
+
             // The login is kept in the site's memory, which a deploy, an app pool recycle or a long time spent only
             // watching a video (that doesn't touch the session) wipes. The browser's media pass (Models\MediaAccess:
             // encrypted, tamper-proof, renewed while pictures and videos load, cleared at logout) says who it is,
@@ -27,6 +32,7 @@ namespace MediaManager.Filters
                     http.Session["Auth"] = true;
                     http.Session["Role"] = pass.Role;
                     http.Session["AuthAt"] = pass.LoggedInUtc.Ticks; // for Sign out everywhere
+                    http.Session["LoginId"] = pass.LoginId ?? ActiveLogins.NewId(); // older passes get an id now
                     http.Session.Timeout = SiteSettings.LoginMinutes;
                 }
             }
@@ -59,7 +65,13 @@ namespace MediaManager.Filters
             // Keep the /media pass (Models\MediaAccess) alive as long as the session is, and recreate it if it's
             // missing, e.g. a browser that was logged in before media needed a login.
             bool isGuest = Roles.IsGuest(http.Session);
+            if (!(http.Session["LoginId"] is string loginId))
+                http.Session["LoginId"] = loginId = ActiveLogins.NewId();
             MediaAccess.Refresh(http, isGuest ? Roles.Guest : Roles.Owner, http.Session.Timeout);
+
+            // "Logged in now" list (Activity page): this login is still in use
+            ActiveLogins.Touch(loginId, isGuest ? Roles.Guest : Roles.Owner, http.Request.UserHostAddress, http.Request.UserAgent,
+                http.Session["AuthAt"] is long at ? new DateTime(at, DateTimeKind.Utc) : DateTime.UtcNow);
 
             // Guests may only use actions marked [GuestAllowed].
             if (isGuest && !IsGuestAllowed(filterContext.ActionDescriptor))

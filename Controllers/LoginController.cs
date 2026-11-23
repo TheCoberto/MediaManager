@@ -85,6 +85,7 @@ namespace MediaManager.Controllers
         {
             if (Session["Auth"] != null)
                 ActivityLog.Write(ActivityLog.Login, (Roles.IsGuest(Session) ? "Guest" : "Owner") + " logged out.");
+            ActiveLogins.End(Session["LoginId"] as string ?? MediaAccess.Read(HttpContext)?.LoginId);
             EndSession();
             MediaAccess.Clear(HttpContext);
             return RedirectToAction("Index");
@@ -102,7 +103,9 @@ namespace MediaManager.Controllers
             // planted) is thrown away and its cookie dropped, so the next page starts a fresh one. That page's
             // AuthFilter logs it in from the media pass issued here, the same way it does after a restart.
             EndSession();
-            MediaAccess.Issue(HttpContext, role, SiteSettings.LoginMinutes); // Site.config LoginHours (default 12 hours)
+            string loginId = ActiveLogins.NewId();
+            MediaAccess.Issue(HttpContext, role, SiteSettings.LoginMinutes, loginId: loginId); // Site.config LoginHours (default 12 hours)
+            ActiveLogins.Start(loginId, role, client, Request.UserAgent);                      // "Logged in now" list
             HttpContext.Items[ActivityLog.RoleItem] = role;                   // the session can't say it any more
         }
 
