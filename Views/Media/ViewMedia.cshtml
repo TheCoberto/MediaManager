@@ -68,6 +68,14 @@
                 title="Save a new file turned the way it's shown now, next to this one. This file isn't changed.">Save rotated copy</button>
     </div>
 }
+@if (isVideo)
+{
+    <div class="frame-actions" style="text-align:center; margin-top:8px;">
+        <button id="frameBackBtn" title="Back one frame (, key). Pauses the video.">&#9664;&#10073; Frame</button>
+        <button id="frameForwardBtn" title="Forward one frame (. key). Pauses the video.">Frame &#10073;&#9654;</button>
+        <button id="snapshotBtn" title="Save the frame showing now as a full-size JPEG next to this video (S key)">&#128247; Save snapshot</button>
+    </div>
+}
 
 <div class="media-actions" style="text-align:center; margin-top:12px;">
     <button id="favBtn" class="favBtn@(isFavorite ? " is-favorite" : "")" data-favorite="@(isFavorite ? "true" : "false")">
@@ -140,7 +148,7 @@
         <tr><th>Path</th><td style="word-break:break-all; opacity:.8;">@Model.FullPath</td></tr>
     </table>
     <p style="margin:10px 0 0; font-size:12px; opacity:.7;">
-        Keys: &larr; / &rarr; previous / next@(canRotate ? ", R / Shift+R rotate right / left" : "")@((isVideo || isAudio) ? ", J / K / L back 10s / play-pause / forward 10s" : "")
+        Keys: &larr; / &rarr; previous / next@(canRotate ? ", R / Shift+R rotate right / left" : "")@(isVideo ? ", , / . frame back / forward, S save snapshot" : "")@((isVideo || isAudio) ? ", J / K / L back 10s / play-pause / forward 10s" : "")
     </p>
 </div>
 
@@ -211,7 +219,41 @@
                 if ($('#renameModal').is(':visible') || $('#moveModal').is(':visible')) return;
                 if (e.key === 'ArrowLeft' && prev) window.location.href = T.viewUrl(folder, prev);
                 if (e.key === 'ArrowRight' && next) window.location.href = T.viewUrl(folder, next);
-                if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) rotateBy(e.shiftKey ? -90 : 90);
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+                if (e.key === 'r' || e.key === 'R') rotateBy(e.shiftKey ? -90 : 90);
+                if (e.key === ',') stepFrame(-1);
+                if (e.key === '.') stepFrame(1);
+                if (e.key === 's' || e.key === 'S') $('#snapshotBtn:enabled').click();
+            });
+
+            // Videos: step one frame at a time to find the one you want, then save it as a picture.
+            // Browsers don't say a video's frame rate, so a step is 1/30 s (one frame of most phone videos).
+            const FRAME = 1 / 30;
+            function currentVideo() {
+                const el = document.getElementById('mediaElement');
+                return el && el.tagName === 'VIDEO' ? el : null; // an AVI's player isn't there until its copy is ready
+            }
+
+            function stepFrame(dir) {
+                const v = currentVideo();
+                if (!v) return;
+                v.pause();
+                v.currentTime = Math.min(Math.max(0, v.currentTime + dir * FRAME), v.duration || Infinity);
+            }
+
+            $('#frameBackBtn').on('click', () => stepFrame(-1));
+            $('#frameForwardBtn').on('click', () => stepFrame(1));
+
+            // ffmpeg takes the frame from the file itself, at full size and turned the way it's shown here
+            $('#snapshotBtn').on('click', function () {
+                const v = currentVideo();
+                if (!v) { T.showToast('Wait until the video is ready to play.'); return; }
+                const $btn = $(this);
+                T.busy($btn, 'Saving...');
+                const turn = ((angle % 360) + 360) % 360;
+                T.post(window.MEDIA_URLS.saveSnapshot, { folder, fileName: file, seconds: v.currentTime.toFixed(3), degrees: turn }).then(
+                    res => { T.idle($btn); T.showToast('Saved "' + res.newName + '"', 4000); },
+                    () => T.idle($btn));
             });
 
             // Rotate the picture / video on screen only (the file isn't changed). Sideways, it's resized so it still
