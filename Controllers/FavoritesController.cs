@@ -55,6 +55,7 @@ namespace MediaManager.Controllers
                 return Json(new { success = false, message = "File not found." });
 
             Favorites.Set(folder, file, favorite);
+            ActivityLog.Write(ActivityLog.Favorites, favorite ? "Added to favorites." : "Removed from favorites.", folder, file);
             return Json(new { success = true, favorite });
         }
 
@@ -63,7 +64,11 @@ namespace MediaManager.Controllers
         [ValidateAntiForgeryToken]
         public JsonResult Remove(int id)
         {
+            var gone = Favorites.Get(id);
             Favorites.RemoveById(id);
+            if (gone != null)
+                ActivityLog.Write(ActivityLog.Favorites, "Removed a missing file from favorites: "
+                    + (string.IsNullOrEmpty(gone.Folder) ? "" : gone.Folder + "/") + gone.FileName + ".");
             return Json(new { success = true });
         }
     }

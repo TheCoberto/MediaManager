@@ -26,6 +26,35 @@ namespace MediaManager.Controllers
             public DateTime Added;
             public string Url;
             public string Thumb;   // thumbnail URL, or null (show the picture itself, or an icon)
+            public int Views;      // Most Viewed only
+        }
+
+        /// <summary>Choices on the Most Viewed page; 0 = all time.</summary>
+        public static readonly int[] ViewDayChoices = { 7, 30, 0 };
+
+        /// <summary>Most Viewed page: the files whose pages were opened most (Models/MediaViews.cs).</summary>
+        public ActionResult MostViewed(int days = 30)
+        {
+            if (!ViewDayChoices.Contains(days))
+                days = 30;
+
+            var top = MediaViews.Top(100, days == 0 ? (DateTime?)null : DateTime.Now.AddDays(-days));
+            ViewBag.Days = days;
+            return View(top.Select(t =>
+            {
+                string relative = (t.Folder.Length == 0 ? "" : t.Folder + "/") + t.FileName;
+                string kind = MediaPaths.KindOf(t.FileName);
+                return new Item
+                {
+                    Folder = t.Folder,
+                    Name = t.FileName,
+                    Kind = kind,
+                    Added = t.LastAt,
+                    Views = t.Views,
+                    Url = MediaPaths.UrlFor(relative),
+                    Thumb = kind == MediaKind.Image || kind == MediaKind.Video ? Thumbnails.UrlFor(Url, t.Folder, t.FileName) : null
+                };
+            }).ToList());
         }
 
         public ActionResult Index(int days = 7, bool refresh = false)

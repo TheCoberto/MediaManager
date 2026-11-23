@@ -22,6 +22,9 @@
             case ActivityLog.Login: return "Login";
             case ActivityLog.Server: return "Server";
             case ActivityLog.Guestbook: return "Guestbook";
+            case ActivityLog.Download: return "Download";
+            case ActivityLog.Hidden: return "Hidden folder";
+            case ActivityLog.Favorites: return "Favorites";
             default: return kind;
         }
     };
@@ -29,9 +32,56 @@
 
 <h2>Activity</h2>
 <p style="opacity:.8;">
-    What the site has done lately, newest first: uploads, moves, renames, deletes, fixes, AVI copies, duplicate scans,
-    Recycle Bin changes, logins, and anything that went wrong on the server. Kept for @ActivityLog.KeepDays days.
+    What the site has done lately, newest first: uploads, downloads, moves, renames, deletes, fixes, AVI copies,
+    duplicate scans, Recycle Bin changes, favorites, hidden folders, logins, and anything that went wrong on the server.
+    Kept for @ActivityLog.KeepDays days.
 </p>
+
+@{ var summary = ViewBag.Summary as ActivityLog.Summary; }
+@if (summary != null)
+{
+    Func<string, int> n = k => summary.ByKind.TryGetValue(k, out int c) ? c : 0;
+    Func<int, string, string> plural = (c, word) => c.ToString("N0") + " " + word + (c == 1 ? "" : "s");
+    <div class="act-summary">
+        <h4>Last @summary.Days days</h4>
+        <div class="act-stats">
+            <div><b>@n(ActivityLog.Upload).ToString("N0")</b><span>uploads</span></div>
+            <div><b>@n(ActivityLog.Download).ToString("N0")</b><span>downloads</span></div>
+            <div><b>@summary.Views.ToString("N0")</b><span>views</span></div>
+            <div><b>@(n(ActivityLog.Delete) + n(ActivityLog.Duplicates))</b><span>deletes</span></div>
+            <div><b>@summary.OwnerLogins</b><span>owner logins</span></div>
+            <div><b>@summary.GuestLogins</b><span>guest logins</span></div>
+            <div class="@(summary.WrongPasswords > 0 ? "act-warn" : "")"><b>@summary.WrongPasswords</b><span>wrong passwords</span></div>
+            <div class="@(summary.Errors > 0 ? "act-warn" : "")"><b>@summary.Errors</b><span>errors</span></div>
+        </div>
+        @if (summary.WrongPasswords > 0)
+        {
+            <p>
+                Wrong passwords came from @plural(summary.WrongPasswordIps.Count, "address"): @string.Join(", ", summary.WrongPasswordIps.Take(8))@(summary.WrongPasswordIps.Count > 8 ? ", …" : "").
+                @if (LoginThrottle.SiteWideLimitReached)
+                {
+                    <b>The site-wide limit is on now</b><text> (@LoginThrottle.SiteWideLimit or more in the last hour): every device gets one try before it has to wait.</text>
+                }
+            </p>
+        }
+        @if (summary.LoginIps.Any())
+        {
+            <p>Logged in from: @string.Join(", ", summary.LoginIps.Take(8))@(summary.LoginIps.Count > 8 ? ", …" : "").</p>
+        }
+        @if (summary.TopViewed.Any())
+        {
+            <p>
+                Most viewed:
+                @for (int i = 0; i < summary.TopViewed.Count; i++)
+                {
+                    var t = summary.TopViewed[i];
+                    <a href="@Url.ViewLink(t.Folder, t.FileName)">@t.FileName</a><text> (@t.Views)</text>@(i < summary.TopViewed.Count - 1 ? ", " : "")
+                }
+                &middot; @Html.ActionLink("more", "MostViewed", "Recent", new { days = 7 }, null)
+            </p>
+        }
+    </div>
+}
 
 @if (TempData["SignOutMessage"] != null)
 {
@@ -70,6 +120,14 @@
     .act-msg { word-break: break-word; }
     .act-who { white-space: nowrap; }
     .act-who small { opacity: .75; }
+    .act-summary { margin: 12px 0 18px; padding: 12px 15px; border: 1px solid rgba(127,127,127,.35); border-radius: 6px; }
+    .act-summary h4 { margin: 0 0 10px; }
+    .act-summary p { margin: 8px 0 0; word-break: break-word; }
+    .act-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+    .act-stats div { padding: 6px 8px; border-radius: 6px; background: rgba(127,127,127,.12); }
+    .act-stats b { display: block; font-size: 20px; }
+    .act-stats span { font-size: 12px; opacity: .8; }
+    .act-stats .act-warn { background: rgba(217,83,79,.15); }
 </style>
 
 <div class="act-filters">
