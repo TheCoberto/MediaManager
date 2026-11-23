@@ -8,7 +8,10 @@ own headers before it replaces anything; AVI videos play in the browser through 
 (`Models/ActivityLog.cs`); the Empty Folders page (`Models/EmptyFolders.cs`); Copy (next to Move); cancelling one
 upload in the Add Media queue; tags (`Models/Tags.cs`, Tags page, Gallery tag filter, Select > Tag); the Storage
 and Recently Added pages (`Models/LibraryIndex.cs`); for guests, shared folders (`Models/SharedFolders.cs`,
-"Shared with me") and the Guestbook (`Models/Guestbook.cs`) (#26).
+"Shared with me") and the Guestbook (`Models/Guestbook.cs`) (#26); security hardening and IP / role on every
+activity entry (#23, #24); Log out all other devices (#25); more activity logging, a site-wide wrong-password
+limit, view counts with a Most Viewed page, and the Activity page's weekly summary (#27); the "Logged in now"
+list with per-device log out (`Models/ActiveLogins.cs`, #29).
 
 ## Finding things
 
@@ -62,6 +65,31 @@ the guest uploads folder and shared folders (`Filters/MediaAuthModule.cs`), so e
 - **Keep shares on rename / move.** Renaming or moving a shared folder through the site doesn't carry the
   share over (`SharedFolders` stores the path); it has to be shared again. Deleting one leaves a stale row,
   which the Shared with me page just skips.
+
+## Security
+
+- **Authenticator-app codes for the owner.** A 6-digit TOTP code after the password, set up by scanning a QR
+  code, with a few one-time backup codes. The biggest remaining protection if the site is reachable from the
+  internet. The secret would live in `Site.config` (like the password hash), written by a `deploy\` script.
+- **Check uploads by their contents.** Confirm a file really is the picture or video its extension claims
+  (its first bytes), starting with guest uploads. `FileFormat.Detect` already does this for pictures on the
+  view page.
+- **Real client IP behind a proxy.** If the site ever sits behind Cloudflare or a reverse proxy,
+  `Request.UserHostAddress` is the proxy: the login throttle, the activity log's IPs and the Logged in now list
+  would all show it. Trust `X-Forwarded-For` / `CF-Connecting-IP` only from the proxy's own addresses.
+
+## Activity and logs
+
+- **Alert on a new IP.** Flag a login from an address not seen before (or a run of wrong passwords) at the top
+  of the Activity page, and optionally as a push or email. The weekly summary already lists login IPs.
+- **Filters and CSV export on the Activity page.** Filter by kind, role, IP and date range; export what's
+  shown. More useful now there are download, favorites and hidden-folder entries.
+- **Configurable retention.** `ActivityLog.KeepDays` (60) as a `Site.config` setting, and keep login /
+  security entries longer than the rest.
+- **Email the weekly summary.** The Activity page's "Last 7 days" panel as a weekly email. Needs mail server
+  settings in `Site.config` and something to send it on a schedule (a Windows scheduled task calling a URL).
+- **Count guest views.** Views are counted when a file's View or Random page opens (`Models/MediaViews.cs`);
+  guests' shared-folder pages load files directly, so their views aren't counted yet.
 
 ## Deploying
 
