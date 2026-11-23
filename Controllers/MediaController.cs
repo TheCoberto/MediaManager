@@ -4,6 +4,7 @@ using MediaManager.Models.Constants;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.Caching;
@@ -1133,6 +1134,42 @@ namespace MediaManager.Controllers
 
             InvalidateFolderCache(folder);
             ActivityLog.Write(ActivityLog.Copy, "Rotated copy (" + clockwise + "° clockwise) of " + name + ".", folder, newName);
+            return Json(new { success = true, newName });
+        }
+
+        /// <summary>
+        /// View page's Save Snapshot: saves the video's frame at <paramref name="seconds"/> as "name (frame m-ss.fff).jpg"
+        /// next to it, full size, turned <paramref name="degrees"/> clockwise like it's shown (Models/VideoSnapshot.cs).
+        /// seconds is a string so "12.5" reads the same whatever the server's language settings.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<JsonResult> SaveSnapshot(string folder, string fileName, string seconds, int degrees = 0)
+        {
+            string videoPath = MediaPaths.ResolveFile(folder, fileName);
+            if (videoPath == null || !System.IO.File.Exists(videoPath))
+                return Json(new { success = false, message = "File not found." });
+            if (MediaPaths.KindOf(fileName) != MediaKind.Video)
+                return Json(new { success = false, message = "Snapshots are for videos." });
+            if (!double.TryParse(seconds, NumberStyles.Float, CultureInfo.InvariantCulture, out double at) || at < 0 || double.IsInfinity(at))
+                return Json(new { success = false, message = "Invalid time." });
+
+            int? clockwise = RotatedCopy.Normalize(degrees);
+            if (clockwise == null)
+                return Json(new { success = false, message = "It can only be turned in quarter turns." });
+
+            string name = Path.GetFileName(videoPath);
+            string directory = Path.GetDirectoryName(videoPath);
+            string newName = FreeName(directory, VideoSnapshot.NameFor(name, at));
+            string error = await VideoSnapshot.MakeAsync(videoPath, Path.Combine(directory, newName), at, clockwise.Value);
+            if (error != null)
+            {
+                ActivityLog.Error(ActivityLog.Copy, "Couldn't save a snapshot: " + error, folder, name);
+                return Json(new { success = false, message = error });
+            }
+
+            InvalidateFolderCache(folder);
+            ActivityLog.Write(ActivityLog.Copy, "Snapshot of " + name + " at " + at.ToString("0.000", CultureInfo.InvariantCulture) + "s.", folder, newName);
             return Json(new { success = true, newName });
         }
     }

@@ -175,7 +175,7 @@ namespace MediaManager.Models
         }
 
         /// <summary>ffmpeg filter that turns the picture clockwise.</summary>
-        private static string TurnFilter(int clockwise)
+        internal static string TurnFilter(int clockwise)
         {
             switch (clockwise)
             {
