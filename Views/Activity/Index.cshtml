@@ -44,6 +44,8 @@
     .act-file { word-break: break-all; }
     .act-file small { opacity: .75; }
     .act-msg { word-break: break-word; }
+    .act-who { white-space: nowrap; }
+    .act-who small { opacity: .75; }
 </style>
 
 <div class="act-filters">
@@ -66,7 +68,7 @@ else
 {
     <table class="table table-condensed act-table">
         <thead>
-            <tr><th>When</th><th>What</th><th>File</th><th>Details</th></tr>
+            <tr><th>When</th><th>What</th><th>Who</th><th>File</th><th>Details</th></tr>
         </thead>
         <tbody>
             @foreach (var e in Model)
@@ -74,6 +76,14 @@ else
                 <tr class="@(e.IsError ? "act-error" : "")">
                     <td class="act-time" title="@e.At.ToString("yyyy-MM-dd HH:mm:ss")">@e.At.ToString("MMM d, HH:mm")</td>
                     <td><span class="act-kind">@label(e.Kind)@(e.IsError ? " error" : "")</span></td>
+                    <td class="act-who">
+                        @* Role and IP address of the device (blank for the server's own entries and older entries) *@
+                        @(e.Role ?? (e.Ip != null ? "—" : ""))
+                        @if (e.Ip != null)
+                        {
+                            <br /><small>@e.Ip</small>
+                        }
+                    </td>
                     <td class="act-file">
                         @if (e.FileName != null && e.Folder != null)
                         {

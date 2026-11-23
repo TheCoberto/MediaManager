@@ -5,6 +5,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Threading;
+using System.Web;
 
 namespace MediaManager.Models
 {
@@ -43,27 +44,83 @@ namespace MediaManager.Models
             public string FileName { get; set; }
             public string Message { get; set; }
             public bool IsError { get; set; }
+            public string Ip { get; set; }        // the device that did it; null for the server's own entries
+            public string Role { get; set; }      // Owner / Guest, or null (not logged in, or the server)
         }
+
+        /// <summary>
+        /// HttpContext.Items key: the role to log for this request when the session doesn't say it (set at login,
+        /// where the old session has just been thrown away).
+        /// </summary>
+        public const string RoleItem = "ActivityLog.Role";
 
         private static long lastPruneTicks;
 
+        // Whether the database has the Ip and Role columns yet. The sites' SQL logins can't add them
+        // (deploy\Setup-Database.ps1 does), so until then the log works as before without them. While they're
+        // missing, it looks again every few minutes.
+        private static volatile bool hasWhoColumns;
+        private static long whoCheckedTicks;
+        private static readonly long WhoRecheckTicks = TimeSpan.FromMinutes(5).Ticks;
+
         private static IDbConnection Db() => new SqlConnection(Constants.Constants._connectionString);
+
+        private static bool HasWhoColumns(IDbConnection db)
+        {
+            if (hasWhoColumns)
+                return true;
+            long now = DateTime.UtcNow.Ticks;
+            if (now - Interlocked.Read(ref whoCheckedTicks) < WhoRecheckTicks)
+                return false;
+            Interlocked.Exchange(ref whoCheckedTicks, now);
+            hasWhoColumns = db.ExecuteScalar<int>(@"
+                SELECT CASE WHEN COL_LENGTH('dbo.ActivityLog', 'Ip') IS NOT NULL
+                             AND COL_LENGTH('dbo.ActivityLog', 'Role') IS NOT NULL THEN 1 ELSE 0 END") == 1;
+            return hasWhoColumns;
+        }
+
+        /// <summary>The IP address and role of the request this runs in, or nulls outside one (background work, startup).</summary>
+        private static void CurrentWho(out string ip, out string role)
+        {
+            ip = null;
+            role = null;
+            try
+            {
+                var http = HttpContext.Current;
+                if (http == null)
+                    return;
+                ip = http.Request.UserHostAddress;
+                role = http.Items[RoleItem] as string
+                    ?? http.Session?["Role"] as string
+                    ?? MediaAccess.Read(new HttpContextWrapper(http))?.Role; // media requests have no session
+            }
+            catch (HttpException)
+            {
+                // "Request is not available in this context" (Application_Start): no request, so nobody to name
+            }
+        }
 
         public static void Write(string kind, string message, string folder = null, string fileName = null, bool isError = false)
         {
             try
             {
+                CurrentWho(out string ip, out string role);
                 using (var db = Db())
                 {
-                    db.Execute(@"INSERT INTO ActivityLog (Kind, Folder, FileName, Message, IsError)
-                                 VALUES (@Kind, @Folder, @FileName, @Message, @IsError)",
+                    db.Execute(HasWhoColumns(db)
+                        ? @"INSERT INTO ActivityLog (Kind, Folder, FileName, Message, IsError, Ip, Role)
+                            VALUES (@Kind, @Folder, @FileName, @Message, @IsError, @Ip, @Role)"
+                        : @"INSERT INTO ActivityLog (Kind, Folder, FileName, Message, IsError)
+                            VALUES (@Kind, @Folder, @FileName, @Message, @IsError)",
                         new
                         {
                             Kind = Cut(kind, 30),
                             Folder = folder == null ? null : Cut(MediaPaths.NormalizeFolder(folder), 1000),
                             FileName = Cut(fileName, 400),
                             Message = Cut(message ?? "", 2000),
-                            IsError = isError
+                            IsError = isError,
+                            Ip = Cut(ip, 45),
+                            Role = Cut(role, 10)
                         });
                     PruneNowAndThen(db);
                 }
@@ -83,7 +140,7 @@ namespace MediaManager.Models
         {
             using (var db = Db())
                 return db.Query<Entry>(@"
-                    SELECT TOP (@Take) ActivityId, At, Kind, Folder, FileName, Message, IsError
+                    SELECT TOP (@Take) ActivityId, At, Kind, Folder, FileName, Message, IsError" + (HasWhoColumns(db) ? ", Ip, Role" : "") + @"
                     FROM ActivityLog
                     WHERE (@BeforeId IS NULL OR ActivityId < @BeforeId) AND (@ErrorsOnly = 0 OR IsError = 1)
                     ORDER BY ActivityId DESC",
