@@ -63,58 +63,125 @@ namespace MediaManager.Controllers
             // convert or merge), then take whatever file it produced.
             var template = Path.Combine(outputDir, "media.%(ext)s");
             var ffmpegDir = Path.GetDirectoryName(SiteSettings.FfmpegPath);
+            var arguments = $"{formatArgs} --no-playlist --no-part --no-mtime --ffmpeg-location \"{ffmpegDir}\" "
+                + $"-o \"{template}\" -- \"{uri.AbsoluteUri}\"";
 
-            var processStartInfo = new ProcessStartInfo
+            // Whole request must fit inside httpRuntime executionTimeout="300", including an update and retry.
+            var deadline = DateTime.UtcNow.AddSeconds(280);
+
+            var result = RunYtDlp(arguments, outputDir, deadline);
+            var produced = FindOutput(outputDir, ext);
+
+            if ((result.ExitCode != 0 || produced == null) && TryUpdateYtDlp(deadline))
             {
-                FileName = SiteSettings.YtDlpPath,
-                Arguments = $"{formatArgs} --no-playlist --no-part --no-mtime --ffmpeg-location \"{ffmpegDir}\" "
-                    + $"-o \"{template}\" -- \"{uri.AbsoluteUri}\"",
-                WorkingDirectory = outputDir,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            var errors = new StringBuilder();
-            int exitCode;
-            using (var process = new Process { StartInfo = processStartInfo })
-            {
-                process.OutputDataReceived += (s, e) => { };
-                process.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (errors) errors.AppendLine(e.Data); };
-                process.Start();
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                // Stay inside the request timeout (httpRuntime executionTimeout="300").
-                if (!process.WaitForExit(280 * 1000))
-                {
-                    try { process.Kill(); } catch { }
-                    lock (errors) errors.AppendLine("ERROR: Timed out.");
-                }
-                process.WaitForExit();
-                exitCode = process.ExitCode;
+                // Sites break old yt-dlp versions all the time; after a successful update, try once more.
+                foreach (var f in Directory.GetFiles(outputDir)) { try { System.IO.File.Delete(f); } catch { } }
+                result = RunYtDlp(arguments, outputDir, deadline);
+                produced = FindOutput(outputDir, ext);
             }
 
-            var produced = Directory.GetFiles(outputDir)
-                .Where(f => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(f => new FileInfo(f).Length)
-                .FirstOrDefault();
-
-            if (exitCode == 0 && produced != null)
+            if (result.ExitCode == 0 && produced != null)
             {
                 ActivityLog.Write(ActivityLog.Download, "Downloaded " + fileName + " ("
                     + ActivityLog.FormatBytes(new FileInfo(produced).Length) + ") from " + uri.AbsoluteUri);
                 return File(produced, mimeType, fileName);
             }
 
-            string error;
-            lock (errors) error = LastErrorLine(errors.ToString());
+            var error = LastErrorLine(result.Errors);
             ActivityLog.Error(ActivityLog.Download, "Couldn't download " + fileName + " from " + uri.AbsoluteUri
-                + " (yt-dlp exit code " + exitCode + "): " + error);
+                + " (yt-dlp exit code " + result.ExitCode + "): " + error);
             try { Directory.Delete(outputDir, true); } catch { }
 
             return Content(failMessage + (error.Length > 0 ? " " + error : ""));
+        }
+
+        private static readonly object UpdateLock = new object();
+        private static DateTime lastUpdateCheckUtc = DateTime.MinValue;
+
+        /// <summary>
+        /// Runs "yt-dlp -U" after a failed download, at most once an hour across all requests.
+        /// Returns true only when a newer version was actually installed (so a retry is worth it).
+        /// </summary>
+        private static bool TryUpdateYtDlp(DateTime deadline)
+        {
+            lock (UpdateLock)
+            {
+                if (DateTime.UtcNow - lastUpdateCheckUtc < TimeSpan.FromHours(1))
+                    return false;
+                lastUpdateCheckUtc = DateTime.UtcNow;
+
+                var update = RunYtDlp("-U", Path.GetTempPath(), deadline, captureOutput: true);
+                var log = update.Output + update.Errors;
+                if (update.ExitCode == 0 && log.IndexOf("Updated yt-dlp to", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    ActivityLog.Write(ActivityLog.Download, "Updated yt-dlp after a failed download: " + LastLine(update.Output));
+                    return true;
+                }
+
+                if (update.ExitCode != 0)
+                    ActivityLog.Error(ActivityLog.Download, "Couldn't update yt-dlp (exit code " + update.ExitCode + "): "
+                        + LastErrorLine(update.Errors.Length > 0 ? update.Errors : update.Output));
+                return false;
+            }
+        }
+
+        private class YtDlpResult
+        {
+            public int ExitCode;
+            public string Output = "";
+            public string Errors = "";
+        }
+
+        private static YtDlpResult RunYtDlp(string arguments, string workingDir, DateTime deadline, bool captureOutput = false)
+        {
+            var output = new StringBuilder();
+            var errors = new StringBuilder();
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = SiteSettings.YtDlpPath,
+                Arguments = arguments,
+                WorkingDirectory = workingDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                return new YtDlpResult { ExitCode = -1, Errors = "ERROR: Timed out." };
+
+            using (var process = new Process { StartInfo = startInfo })
+            {
+                process.OutputDataReceived += (s, e) => { if (captureOutput && e.Data != null) lock (output) output.AppendLine(e.Data); };
+                process.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (errors) errors.AppendLine(e.Data); };
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                if (!process.WaitForExit((int)remaining.TotalMilliseconds))
+                {
+                    try { process.Kill(); } catch { }
+                    lock (errors) errors.AppendLine("ERROR: Timed out.");
+                }
+                process.WaitForExit();
+
+                lock (output) lock (errors)
+                    return new YtDlpResult { ExitCode = process.ExitCode, Output = output.ToString(), Errors = errors.ToString() };
+            }
+        }
+
+        private static string FindOutput(string outputDir, string ext)
+        {
+            return Directory.GetFiles(outputDir)
+                .Where(f => f.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(f => new FileInfo(f).Length)
+                .FirstOrDefault();
+        }
+
+        private static string LastLine(string text)
+        {
+            return (text ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim() ?? "";
         }
 
         private static string LastErrorLine(string stderr)
