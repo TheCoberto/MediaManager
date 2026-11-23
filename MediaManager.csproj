@@ -151,6 +151,7 @@
     <Compile Include="Models\FileFormat.cs" />
     <Compile Include="Models\FileViewModel.cs" />
     <Compile Include="Models\HiddenFolders.cs" />
+    <Compile Include="Models\HiddenNames.cs" />
     <Compile Include="Models\LibraryIndex.cs" />
     <Compile Include="Models\MediaPaths.cs" />
     <Compile Include="Models\Favorites.cs" />

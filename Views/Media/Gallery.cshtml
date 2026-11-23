@@ -14,7 +14,7 @@
         <span class="crumb-sep">&rsaquo;</span>
         if (i < parts.Length - 1)
         {
-            @Html.ActionLink(parts[i], "Gallery", "Media", new { folder = string.Join("/", parts.Take(i + 1)) }, null)
+            <a href="@Url.GalleryLink(string.Join("/", parts.Take(i + 1)))">@parts[i]</a>
         }
         else
         {
@@ -31,7 +31,7 @@
     <div class="subfolders">
         @foreach (var s in subfolders)
         {
-            <a class="subfolder-chip" href="@Url.Action("Gallery", "Media", new { folder = galleryFolder + "/" + s.Name })"
+            <a class="subfolder-chip" href="@Url.GalleryLink(galleryFolder + "/" + s.Name)"
                title="@s.FileCount file@(s.FileCount == 1 ? "" : "s")@(s.HasSubfolders ? ", and more folders inside" : "")">
                 &#128193; @s.Name <span class="chip-count">@s.FileCount@(s.HasSubfolders ? "+" : "")</span>
             </a>
@@ -72,7 +72,7 @@
     <button id="selectModeBtn" title="Tick files to download several at once">&#9745; Select</button>
     <button id="downloadFolderBtn" title="Download everything in this folder as one ZIP">&#11015; Download folder</button>
     <button type="button" title="Find files in this folder (and its subfolders) that are exact copies of each other"
-            onclick="location.href='@Url.Action("Index", "Duplicates", new { folder = ViewBag.Folder })'">&#128203; Find duplicates</button>
+            onclick="location.href='@Url.FolderLink("Index", "Duplicates", (string)ViewBag.Folder)'">&#128203; Find duplicates</button>
     <button id="deleteFolderBtn"
             title="Delete this folder: empty folders are removed, anything else goes to the Recycle Bin">&#128465; Delete folder</button>
 </div>
@@ -172,18 +172,15 @@
             return seed;
         }
         let shuffleSeed = Number(sessionStorage.getItem(SEED_KEY)) || newSeed();
-        const MEDIA_BASE = @Html.Raw(Json.Encode(ViewBag.MediaBaseUrl ?? "")); // e.g. "/media/Videos/Cats"
 
         // "Include subfolders": also show everything in the subfolders, remembered per folder in this browser
         const SUBS_KEY = 'gallerySubs:' + folder.toLowerCase();
         let includeSubs = $('#includeSubs').length > 0 && localStorage.getItem(SUBS_KEY) === '1';
 
         // Each item is identified by its path from this folder: "a.jpg", or "Kittens/a.jpg" from a subfolder.
-        function pathUrl(path) {
-            return MEDIA_BASE + '/' + path.split('/').map(encodeURIComponent).join('/');
-        }
-        function mediaUrl(path) {
-            return `${pathUrl(path)}?v=${CACHE_BUSTER}`;
+        // Its file's link comes from the server (data-url): on a site that hides names only the server can make it.
+        function mediaUrl(url) {
+            return `${url}?v=${CACHE_BUSTER}`;
         }
 
         function updateCount() {
@@ -195,9 +192,9 @@
                         title="${isFavorite ? "Remove from Favorites" : "Add to Favorites"}">${isFavorite ? "&#9733; Favorite" : "&#9734; Favorite"}</button>`;
         }
 
-        // The picture / player / document preview for one gallery item (thumb: its thumbnail URL, if it has one)
-        function itemMediaHtml(path, thumb) {
-            return T.mediaHtml(mediaUrl(path), path, { compact: true, maxHeight: '400px', sizeAttrs: 'width="500" height="400"', thumb });
+        // The picture / player / document preview for one gallery item (url: the file's link; thumb: its thumbnail URL, if it has one)
+        function itemMediaHtml(path, url, thumb) {
+            return T.mediaHtml(mediaUrl(url), path, { compact: true, maxHeight: '400px', sizeAttrs: 'width="500" height="400"', thumb });
         }
 
         function joinPath(sub, name) { return sub ? sub + '/' + name : name; }
@@ -235,6 +232,7 @@
         function itemFile($el) { return itemOf($el).attr('data-file'); }
         function itemFolder($el) { return itemOf($el).attr('data-folder'); }
         function itemKey($el) { return itemOf($el).attr('data-key'); }
+        function itemUrl($el) { return itemOf($el).attr('data-url'); }
 
         function removeItem($item) {
             selected.delete($item.attr('data-key')); // moved / deleted: no longer downloadable from here
@@ -303,14 +301,14 @@
 
                         const isSel = selected.has(key);
                         const $item = $(`
-                            <div class="media-item${isSel ? ' is-selected' : ''}" data-file="${safe}" data-key="${T.escapeHtml(key)}"
+                            <div class="media-item${isSel ? ' is-selected' : ''}" data-file="${safe}" data-key="${T.escapeHtml(key)}" data-url="${T.escapeHtml(item.Url)}"
                                  data-folder="${T.escapeHtml(item.Folder)}" data-sub="${T.escapeHtml(sub)}" data-size="${Number(item.Size) || 0}"
                                  style="margin-bottom: 25px; border-bottom: 1px solid #555; padding-bottom: 15px;">
                                 <label class="sel-box"><input type="checkbox" class="selBox"${isSel ? ' checked' : ''}>Select</label>
                                 <h4>${safe}</h4>
-                                ${sub ? `<div class="item-sub">in <a href="${T.escapeHtml(T.galleryUrl(item.Folder))}">&#128193; ${T.escapeHtml(sub)}</a></div>` : ''}
+                                ${sub ? `<div class="item-sub">in <a href="${T.escapeHtml(item.FolderLink)}">&#128193; ${T.escapeHtml(sub)}</a></div>` : ''}
 
-                                <div class="media-body">${itemMediaHtml(key, item.Thumb)}</div>
+                                <div class="media-body">${itemMediaHtml(key, item.Url, item.Thumb)}</div>
                                 ${tagListHtml(item.Tags)}
 
                                 <div class="media-actions" style="margin-top: 10px;">
@@ -427,7 +425,7 @@
         });
 
         $(document).on("click", ".viewBtn", function () {
-            window.location.href = T.viewUrl(itemFolder($(this)), itemFile($(this)));
+            T.go(itemFolder($(this)), itemFile($(this)));
         });
 
         // Tapping a picture (or a document card) opens it, like View / Open. Ctrl / Cmd / Shift-click opens a new tab.
@@ -439,13 +437,12 @@
                 updateSelBar();
                 return;
             }
-            const url = T.viewUrl(itemFolder($item), itemFile($item)); // read now, so it's right after a rename
-            if (e.ctrlKey || e.metaKey || e.shiftKey) window.open(url, '_blank');
-            else window.location.href = url;
+            // Folder and name read now, so it's right after a rename
+            T.go(itemFolder($item), itemFile($item), { newTab: e.ctrlKey || e.metaKey || e.shiftKey });
         });
 
         $(document).on("click", ".downloadBtn", function () {
-            T.download(pathUrl(itemKey($(this))), itemFile($(this)));
+            T.download(itemUrl($(this)), itemFile($(this)));
         });
 
         $(document).on("click", ".moveBtn", function () {
@@ -464,18 +461,18 @@
             const oldName = itemFile($item);
             const oldKey = itemKey($item);
             const sub = $item.attr('data-sub') || '';
-            T.rename(itemFolder($item), oldName).then(newName => {
+            T.rename(itemFolder($item), oldName).then(newName => T.links(itemFolder($item), newName).then(l => {
                 const newKey = joinPath(sub, newName);
                 if (selected.has(oldKey)) { selected.set(newKey, selected.get(oldKey)); selected.delete(oldKey); }
                 shown.add(newKey); // its new name may sort later in the order: don't show it again
-                $item.attr('data-file', newName).attr('data-key', newKey);
+                $item.attr('data-file', newName).attr('data-key', newKey).attr('data-url', l.url);
                 $item.find('h4').text(newName);
                 $item.find('[data-file]').attr('data-file', newName);
-                $item.find('.media-body').html(itemMediaHtml(newKey)); // the old thumbnail went with the old name
+                $item.find('.media-body').html(itemMediaHtml(newKey, l.url)); // the old thumbnail went with the old name
                 T.loadTextPreviews($item);
                 const $view = $item.find('.viewBtn');
                 $view.text(T.kindOf(newName) === 'document' ? 'Open' : 'View');
-            });
+            }, () => { }));
         });
 
         $(document).on("click", ".corruptedBtn", function () {
@@ -500,7 +497,7 @@
                     // Show the repaired file, not the one the browser cached (a new ?v= makes it load again)
                     const $item = itemOf($btn), key = itemKey($btn);
                     CACHE_BUSTER = Date.now();
-                    $item.find('.media-body').html(itemMediaHtml(key));
+                    $item.find('.media-body').html(itemMediaHtml(key, itemUrl($item)));
                     $btn.closest('.corruptedTools').replaceWith(corruptedButtonHtml(file, false));
                     T.showToast('Fixed "' + file + '": showing the repaired file.', 5000);
                 },
@@ -630,7 +627,13 @@
         $('#selDownloadBtn').on('click', function () {
             const files = Array.from(selected.keys());
             if (!files.length) return;
-            if (files.length === 1) return T.download(pathUrl(files[0]), files[0].split('/').pop());
+            if (files.length === 1) {
+                // Its link is on its tile, or (scrolled away by a new search) from the server
+                const key = files[0], slash = key.lastIndexOf('/'), name = key.slice(slash + 1);
+                const $item = $('#imageContainer .media-item').filter((i, el) => el.getAttribute('data-key') === key);
+                if ($item.length) return T.download(itemUrl($item), name);
+                return T.links(slash < 0 ? folder : folder + '/' + key.slice(0, slash), name).then(l => T.download(l.url, name), () => { });
+            }
 
             const form = $('<form method="post" style="display:none;"></form>')
                 .attr('action', '@Url.Action("Selected", "BulkDownload")');
@@ -653,7 +656,7 @@
                     if (!s || !s.success) return $('#dlInfo').text((s && s.message) || "Couldn't check the folder.");
                     if (!s.withSubfoldersFiles) return $('#dlInfo').text('There are no files to download in this folder.');
 
-                    const base = '@Url.Action("Folder", "BulkDownload")?folder=' + encodeURIComponent(folder);
+                    const base = s.link; // has a "?", so "&subfolders=true" can follow
                     const hasSub = s.withSubfoldersFiles > s.files;
                     $('#dlInfo').text(`"${s.name}"` + (hasSub ? ' has subfolders too.' : ''));
                     $('#dlHereBtn').text(`This folder only: ${s.files} file${s.files === 1 ? '' : 's'} (${s.size})`)
@@ -697,7 +700,8 @@
                     T.post('@Url.Action("DeleteFolder", "Media")', { folder, confirmName }).then(res => {
                         alert(res.message);
                         // Go up a level (or home for a top-level folder)
-                        window.location.href = res.parent ? T.galleryUrl(res.parent) : '@Url.Action("Index", "Home")';
+                        if (res.parent) T.go(res.parent, null);
+                        else window.location.href = '@Url.Action("Index", "Home")';
                     }, () => T.idle($btn));
                 })
                 .fail(xhr => { if (xhr.status !== 401) alert("Couldn't check the folder (" + xhr.status + ")."); });

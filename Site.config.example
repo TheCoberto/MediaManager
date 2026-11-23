@@ -30,6 +30,9 @@
   <!-- <add key="Feature:StorageRandom" value="true" /> -->
   <!-- Downloaders = Audio + Video Downloader; needs yt-dlp.exe (and ffmpeg.exe) in ToolsFolder -->
   <!-- <add key="Feature:Downloaders" value="true" /> -->
+  <!-- HideNames = links to folders and files show a scrambled code instead of the names (address bar,
+       history, bookmarks, shared links); readable links still work. Off when omitted. -->
+  <!-- <add key="Feature:HideNames" value="true" /> -->
 
   <!-- Pages that are ON when omitted -->
   <!-- Feature:Images = the Guest Uploads page -->

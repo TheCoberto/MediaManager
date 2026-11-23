@@ -17,7 +17,32 @@ namespace MediaManager.Filters
     {
         public void Init(HttpApplication application)
         {
+            application.BeginRequest += (sender, e) => OpenHiddenLink(((HttpApplication)sender).Context);
             application.AuthorizeRequest += (sender, e) => Check(((HttpApplication)sender).Context);
+        }
+
+        /// <summary>
+        /// A hidden-name file link ("/m/&lt;token&gt;", Models/HiddenNames.cs) becomes the file's own /media path, so
+        /// the check below and IIS's file serving (with seeking) work exactly as for a readable link. The browser
+        /// still sees only the token. Anything that isn't one of this site's tokens is "not found".
+        /// </summary>
+        private static void OpenHiddenLink(HttpContext context)
+        {
+            string path = context.Request.AppRelativeCurrentExecutionFilePath;
+            string prefix = MediaPaths.HiddenRoot + "/";
+            if (path == null || !path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string token = path.Substring(prefix.Length);
+            string relative = token.IndexOf('/') < 0 ? HiddenNames.Decode(token) : null;
+            if (string.IsNullOrEmpty(relative) || MediaPaths.ResolveFolder(relative) == null)
+            {
+                Deny(context, 404, "Not found.");
+                return;
+            }
+
+            string query = context.Request.Url.Query;
+            context.RewritePath(MediaPaths.VirtualRoot + "/" + relative, "", query.Length > 0 ? query.Substring(1) : "", false);
         }
 
         public void Dispose()
@@ -33,6 +58,13 @@ namespace MediaManager.Filters
 
             // Never let http.sys keep a copy it could hand out later without asking us.
             context.Response.DisableKernelCache();
+
+            // The hidden-names key lives in the media folder (Models/HiddenNames.cs): never hand it out
+            if (path.EndsWith("/" + HiddenNames.KeyFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                Deny(context, 404, "Not found.");
+                return;
+            }
 
             var http = new HttpContextWrapper(context);
             var pass = MediaAccess.Read(http);

@@ -49,11 +49,10 @@
         var top = folder.Split('/')[0];
 
         <li class="folder-item"
-            data-path="@folder"
             data-folder="@folder"
             data-top="@top"
             style="padding-left:@(padding)px; cursor:pointer; @(hidden.Contains(top) ? "display:none;" : "")">
-            @Html.ActionLink(folder, "Gallery", "Media", new { folder = folder }, null)
+            <a href="@Url.GalleryLink(folder)">@folder</a>
         </li>
     }
 </ul>
@@ -108,9 +107,7 @@ $(document).ready(function () {
     $('#folderList').on('click', '.folder-item', function (e) {
         if ($(e.target).is('a')) return;
 
-        const folder = $(this).attr('data-path');
-        window.location.href =
-            '@Url.Action("Gallery", "Media")' + '?folder=' + encodeURIComponent(folder);
+        window.location.href = $(this).children('a').attr('href'); // the folder's own link (names may be hidden)
     });
 
     function applyFilter() {

@@ -89,7 +89,7 @@ else
                             }
                             else if (inFolder)
                             {
-                                @Html.ActionLink(folder, "Gallery", "Media", new { folder }, null)
+                                <a href="@Url.GalleryLink(folder)">@folder</a>
                             }
                             else
                             {
@@ -99,7 +99,7 @@ else
                         <td class="flag-actions">
                             @if (inFolder)
                             {
-                                @Html.ActionLink("View", "ViewMedia", "Media", new { folder, file = f.FileName }, null)
+                                <a href="@Url.ViewLink(folder, f.FileName)">View</a>
                                 if (f.Corrupted && f.IsVideo)
                                 {
                                     <button type="button" class="fixBtn">Fix File</button>

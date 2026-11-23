@@ -22,8 +22,12 @@ namespace MediaManager.Controllers
         /// A file's thumbnail (JPEG), or a redirect to the file itself if it can't have one.
         /// The URL carries a version (v) that changes with the file, so the browser may keep it for a long time.
         /// </summary>
-        public async Task<ActionResult> Get(string folder, string file)
+        /// <param name="f">A hidden-name link's token, in place of folder + file (Models/HiddenNames.cs).</param>
+        public async Task<ActionResult> Get(string folder, string file, string f = null)
         {
+            if (f != null && !HiddenNames.TryDecodeFile(f, out folder, out file))
+                return HttpNotFound();
+
             string path = MediaPaths.ResolveFile(folder, file);
             if (path == null || !MediaPaths.IsSupportedMedia(path) || !System.IO.File.Exists(path))
                 return HttpNotFound();

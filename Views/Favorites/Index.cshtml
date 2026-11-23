@@ -31,7 +31,7 @@ else
              style="margin-bottom:25px; border-bottom:1px solid #555; padding-bottom:15px;">
             <h4 style="word-break:break-all;">@f.FileName</h4>
             <div style="margin-bottom:8px; opacity:.8;">
-                in @Html.ActionLink(string.IsNullOrEmpty(f.Folder) ? "(top folder)" : f.Folder, "Gallery", "Media", new { folder = f.Folder }, null)
+                in <a href="@Url.GalleryLink(f.Folder)">@(string.IsNullOrEmpty(f.Folder) ? "(top folder)" : f.Folder)</a>
                 &middot; favorited @f.CreatedAt.ToString("yyyy-MM-dd")
             </div>
 
@@ -91,7 +91,7 @@ else
 
             $(document).on('click', '.viewBtn', function () {
                 const $item = $(this).closest('.fav-item');
-                window.location.href = T.viewUrl($item.attr('data-folder'), $item.attr('data-file'));
+                T.go($item.attr('data-folder'), $item.attr('data-file'));
             });
 
             T.pauseVideosOutOfView();

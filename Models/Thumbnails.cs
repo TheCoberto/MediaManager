@@ -74,7 +74,10 @@ namespace MediaManager.Models
                     return null;
 
                 string version = info.LastWriteTimeUtc.Ticks.ToString("x") + "-" + info.Length.ToString("x");
-                return url.Action("Get", "Thumbnails", new { folder = MediaPaths.NormalizeFolder(folder), file = fileName, v = version });
+                folder = MediaPaths.NormalizeFolder(folder);
+                return HiddenNames.Enabled
+                    ? url.Action("Get", "Thumbnails", new { f = HiddenNames.Encode(folder.Length == 0 ? fileName : folder + "/" + fileName), v = version })
+                    : url.Action("Get", "Thumbnails", new { folder, file = fileName, v = version });
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {

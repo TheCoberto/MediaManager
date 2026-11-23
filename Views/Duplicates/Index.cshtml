@@ -171,7 +171,7 @@
             }
 
             function fileHtml(f, g, keep) {
-                const view = T.viewUrl(f.folder, f.file);
+                const view = f.view;
                 const thumb = f.kind === 'image' || f.kind === 'video'
                     ? `<img src="${T.escapeHtml(f.thumb || (f.kind === 'image' ? f.url : ''))}" loading="lazy" alt="">`
                     : `<div class="kind-icon">${f.kind === 'audio' ? '&#127925;' : '&#128196;'}</div>`;

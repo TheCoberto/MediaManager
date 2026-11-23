@@ -19,8 +19,12 @@ namespace MediaManager.Controllers
     {
         private const string AllFilesCacheKey = "MediaCache__AllFiles";
 
-        public ActionResult Gallery(string folder)
+        /// <param name="f">A hidden-name link's token, in place of folder (Models/HiddenNames.cs).</param>
+        public ActionResult Gallery(string folder, string f = null)
         {
+            if (f != null && (folder = HiddenNames.Decode(f)) == null)
+                return HttpNotFound();
+
             if (string.IsNullOrWhiteSpace(folder))
                 return RedirectToAction("Index", "Home");
 
@@ -34,8 +38,11 @@ namespace MediaManager.Controllers
             if (MediaPaths.ResolveFolder(folder) == null)
                 return HttpNotFound();
 
+            // A readable link (old bookmark, typed in) on a site that hides names: go to the hidden one instead
+            if (f == null && HiddenNames.Enabled)
+                return Redirect(Url.GalleryLink(folder));
+
             ViewBag.Folder = folder;
-            ViewBag.MediaBaseUrl = MediaPaths.UrlFor(folder);
             ViewBag.Subfolders = GetSubfolders(MediaPaths.ResolveFolder(folder));
             return View("Gallery");
         }
@@ -166,7 +173,9 @@ namespace MediaManager.Controllers
                     Favorite = favoritesByFolder[i.Folder].Contains(i.Name),
                     Tags = tagsByFolder[i.Folder].TryGetValue(i.Name, out var names) ? names : new List<string>(),
                     Size = info?.Length ?? 0,                                // for the "N selected · size" bar
-                    Thumb = info == null ? null : Thumbnails.UrlFor(Url, i.Folder, i.Name, info) // null: show the file itself
+                    Thumb = info == null ? null : Thumbnails.UrlFor(Url, i.Folder, i.Name, info), // null: show the file itself
+                    Url = MediaPaths.UrlFor(i.Folder + "/" + i.Name),       // the file itself
+                    FolderLink = Url.GalleryLink(i.Folder)                  // its folder's Gallery (for "in Kittens")
                 };
             });
 
@@ -184,6 +193,28 @@ namespace MediaManager.Controllers
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// The links for a folder, or a file in it, for page scripts that only have the names (after a Rename, say)
+        /// on a site that hides names (Models/HiddenNames.cs): the scripts can't make the tokens themselves.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public JsonResult Links(string folder, string file = null, string within = null)
+        {
+            folder = MediaPaths.NormalizeFolder(folder);
+            if (MediaPaths.ResolveFolder(folder) == null || (file != null && !MediaPaths.IsPlainFileName(file)))
+                return Json(new { success = false, message = "Invalid folder or file." });
+
+            return Json(new
+            {
+                success = true,
+                gallery = Url.GalleryLink(folder),
+                view = file == null ? null : Url.ViewLink(folder, file),
+                url = file == null ? null : MediaPaths.UrlFor(folder + "/" + file),
+                random = file == null || !SiteSettings.StorageRandomEnabled ? null : Url.RandomLink(folder, file, within)
+            });
         }
 
         /// <summary>Every folder under the media root ("a/b" form, sorted), for the Move dialog's folder picker.</summary>
@@ -369,13 +400,20 @@ namespace MediaManager.Controllers
             return View("~/Views/Shared/UploadFailed.cshtml");
         }
 
-        public ActionResult ViewMedia(string folder, string file)
+        /// <param name="f">A hidden-name link's token, in place of folder + file (Models/HiddenNames.cs).</param>
+        public ActionResult ViewMedia(string folder, string file, string f = null)
         {
+            if (f != null && !HiddenNames.TryDecodeFile(f, out folder, out file))
+                return HttpNotFound();
+
             // Files at the very top of the library ('' folder) open too, e.g. from Duplicates or Recently Added;
             // the view hides the tools that need a folder.
             string fullPath = MediaPaths.ResolveFile(folder, file);
             if (fullPath == null || !System.IO.File.Exists(fullPath))
                 return HttpNotFound();
+
+            if (f == null && HiddenNames.Enabled)
+                return Redirect(Url.ViewLink(folder, file));
 
             // File details for the info panel (dimensions/duration are filled in by the browser)
             var info = new FileInfo(fullPath);
@@ -821,16 +859,22 @@ namespace MediaManager.Controllers
         /// redirects to its own URL, so Back / refresh / Rename keep working on a specific file.
         /// With folder + file: shows that file with the usual media tools.
         /// </summary>
-        public ActionResult StorageRandom(string folder, string file, string within)
+        /// <param name="f">A hidden-name link's token, in place of folder + file (Models/HiddenNames.cs).</param>
+        /// <param name="w">A hidden-name link's token, in place of within.</param>
+        public ActionResult StorageRandom(string folder, string file, string within, string f = null, string w = null)
         {
             if (!SiteSettings.StorageRandomEnabled)
                 return HttpNotFound();
 
+            if ((w != null && (within = HiddenNames.Decode(w)) == null)
+                || (f != null && !HiddenNames.TryDecodeFile(f, out folder, out file)))
+                return HttpNotFound();
+
             within = MediaPaths.NormalizeFolder(within);
-            object withinRoute = within.Length > 0 ? new { within } : null;
+            string sameScope = Url.RandomLink(null, null, within);
 
             // Pictures, videos and audio only: random documents aren't much use here
-            var allFiles = GetAllFilesCached().Where(f => MediaPaths.KindOf(f) != MediaKind.Document).ToList();
+            var allFiles = GetAllFilesCached().Where(p => MediaPaths.KindOf(p) != MediaKind.Document).ToList();
             var pool = FilesWithin(allFiles, within);
 
             if (string.IsNullOrEmpty(file))
@@ -849,17 +893,12 @@ namespace MediaManager.Controllers
                 {
                     // List is stale (file was moved/deleted outside the app): rebuild and pick again.
                     MemoryCache.Default.Remove(AllFilesCacheKey);
-                    return RedirectToAction("StorageRandom", withinRoute);
+                    return Redirect(sameScope);
                 }
 
                 string relative = MediaPaths.ToRelative(picked);
                 int slash = relative.LastIndexOf('/');
-                return RedirectToAction("StorageRandom", new
-                {
-                    folder = slash < 0 ? null : relative.Substring(0, slash),
-                    file = Path.GetFileName(picked),
-                    within = within.Length > 0 ? within : null
-                });
+                return Redirect(Url.RandomLink(slash < 0 ? "" : relative.Substring(0, slash), Path.GetFileName(picked), within));
             }
 
             folder = MediaPaths.NormalizeFolder(folder);
@@ -867,8 +906,11 @@ namespace MediaManager.Controllers
             if (fullPath == null || !MediaPaths.IsSupportedMedia(fullPath) || !System.IO.File.Exists(fullPath))
             {
                 TempData["Message"] = "That file isn't there any more, so here's another one.";
-                return RedirectToAction("StorageRandom", withinRoute);
+                return Redirect(sameScope);
             }
+
+            if (f == null && HiddenNames.Enabled)
+                return Redirect(Url.RandomLink(folder, file, within));
 
             var info = new FileInfo(fullPath);
             var model = new FileViewModel
@@ -938,8 +980,7 @@ namespace MediaManager.Controllers
             Flags.Set(folder, fileName, current.Corrupted, true);
 
             TempData["Message"] = "\"" + fileName + "\" marked for deletion.";
-            within = MediaPaths.NormalizeFolder(within);
-            return RedirectToAction("StorageRandom", within.Length > 0 ? new { within } : null);
+            return Redirect(Url.RandomLink(null, null, within));
         }
 
         [HttpPost]
