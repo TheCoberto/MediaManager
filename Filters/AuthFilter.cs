@@ -10,6 +10,11 @@ namespace MediaManager.Filters
         {
             var http = filterContext.HttpContext;
 
+            // Signed out everywhere (Activity page) since this session logged in: it's over. Its media pass is
+            // refused too, so this ends at the login page.
+            if (http.Session["Auth"] != null && !MediaAccess.IsStillSignedIn(http.Session["AuthAt"]))
+                http.Session.Clear();
+
             // The login is kept in the site's memory, which a deploy, an app pool recycle or a long time spent only
             // watching a video (that doesn't touch the session) wipes. The browser's media pass (Models\MediaAccess:
             // encrypted, tamper-proof, renewed while pictures and videos load, cleared at logout) says who it is,
@@ -21,6 +26,7 @@ namespace MediaManager.Filters
                 {
                     http.Session["Auth"] = true;
                     http.Session["Role"] = pass.Role;
+                    http.Session["AuthAt"] = pass.LoggedInUtc.Ticks; // for Sign out everywhere
                     http.Session.Timeout = SiteSettings.LoginMinutes;
                 }
             }
