@@ -75,6 +75,9 @@ namespace MediaManager.Models
 
         public static string YtDlpPath => Path.Combine(ToolsFolder, "yt-dlp.exe");
 
+        /// <summary>JavaScript runtime yt-dlp needs for YouTube; used when present in ToolsFolder.</summary>
+        public static string DenoPath => Path.Combine(ToolsFolder, "deno.exe");
+
         private static long GetMegabytes(string key, long fallbackMb)
         {
             long mb = long.TryParse(ConfigurationManager.AppSettings[key], out var v) && v > 0 ? v : fallbackMb;
