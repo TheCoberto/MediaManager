@@ -80,7 +80,9 @@ IIS site "Media Manager"  (e.g. http://pc-name:8080/)
 - **ffmpeg.exe and yt-dlp.exe** in one folder, for repairing videos and the Downloaders. Download them from
   [ffmpeg.org](https://ffmpeg.org/download.html) (a Windows build) and
   [yt-dlp](https://github.com/yt-dlp/yt-dlp/releases), and put them in `C:\Tools\`, or anywhere else and set
-  `ToolsFolder` (see [Site.config settings](#siteconfig-settings)).
+  `ToolsFolder` (see [Site.config settings](#siteconfig-settings)). For YouTube downloads, also put
+  `deno.exe` there ([deno releases](https://github.com/denoland/deno/releases), the Windows zip): yt-dlp needs
+  a JavaScript runtime for YouTube, and the site passes it along when it finds one.
 
 ## Installing
 

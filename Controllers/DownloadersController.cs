@@ -62,8 +62,10 @@ namespace MediaManager.Controllers
             // Let yt-dlp pick the extension (a fixed ".mp3"/".mp4" in the template breaks when it has to
             // convert or merge), then take whatever file it produced.
             var template = Path.Combine(outputDir, "media.%(ext)s");
-            var ffmpegDir = Path.GetDirectoryName(SiteSettings.FfmpegPath);
-            var arguments = $"{formatArgs} --no-playlist --no-part --no-mtime --ffmpeg-location \"{ffmpegDir}\" "
+            // Pass ffmpeg.exe itself, not its folder: a folder like "E:\" ends in a backslash, and \" on a
+            // Windows command line escapes the closing quote, which garbles every argument after it.
+            var arguments = $"{formatArgs} --no-playlist --no-part --no-mtime --ffmpeg-location \"{SiteSettings.FfmpegPath}\" "
+                + (System.IO.File.Exists(SiteSettings.DenoPath) ? $"--js-runtimes \"deno:{SiteSettings.DenoPath}\" " : "")
                 + $"-o \"{template}\" -- \"{uri.AbsoluteUri}\"";
 
             // Whole request must fit inside httpRuntime executionTimeout="300", including an update and retry.
@@ -187,7 +189,8 @@ namespace MediaManager.Controllers
         private static string LastErrorLine(string stderr)
         {
             var lines = stderr.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            var line = lines.LastOrDefault(l => l.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+            var line = lines.LastOrDefault(l => l.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)
+                    || l.IndexOf(": error:", StringComparison.OrdinalIgnoreCase) >= 0)
                 ?? lines.LastOrDefault() ?? "";
             line = line.Trim();
             return line.Length > 500 ? line.Substring(0, 500) : line;
