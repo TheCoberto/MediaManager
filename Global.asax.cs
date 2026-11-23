@@ -18,6 +18,10 @@ namespace MediaManager
 
             // Don't announce the MVC version (X-AspNetMvc-Version)
             MvcHandler.DisableMvcResponseHeader = true;
+
+            // X-Frame-Options comes from Web.config for every answer; without this, pages with a form token
+            // (Html.AntiForgeryToken) would send it a second time ("SAMEORIGIN,SAMEORIGIN").
+            System.Web.Helpers.AntiForgeryConfig.SuppressXFrameOptionsHeader = true;
         }
 
         protected void Application_BeginRequest()
