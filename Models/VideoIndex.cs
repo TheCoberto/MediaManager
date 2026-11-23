@@ -366,7 +366,8 @@ namespace MediaManager.Models
             public string Output; // what it printed (ffprobe's answer)
         }
 
-        internal static async Task<ToolResult> RunToolAsync(string exe, string args)
+        /// <param name="timeout">How long it may run (default: <see cref="Timeout"/>, enough for a rewrite without re-encoding).</param>
+        internal static async Task<ToolResult> RunToolAsync(string exe, string args, TimeSpan? timeout = null)
         {
             string name = Path.GetFileNameWithoutExtension(exe);
             var psi = new ProcessStartInfo
@@ -385,7 +386,7 @@ namespace MediaManager.Models
                 {
                     var stdout = process.StandardOutput.ReadToEndAsync();
                     var stderr = process.StandardError.ReadToEndAsync();
-                    var exited = Task.Run(() => process.WaitForExit((int)Timeout.TotalMilliseconds));
+                    var exited = Task.Run(() => process.WaitForExit((int)(timeout ?? Timeout).TotalMilliseconds));
                     if (!await exited.ConfigureAwait(false))
                     {
                         try { process.Kill(); } catch (InvalidOperationException) { } // already gone

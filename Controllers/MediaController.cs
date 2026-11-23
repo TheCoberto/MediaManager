@@ -1098,5 +1098,42 @@ namespace MediaManager.Controllers
             InvalidateFolderCache(folder);
             return Json(new { success = true, @fixed = true, message = "Fixed: you can skip through it in any player now." });
         }
+
+        /// <summary>
+        /// View page's Save Rotated Copy: writes "name (rotated).ext" next to the file, turned <paramref name="degrees"/>
+        /// clockwise from how the browser shows it (Models/RotatedCopy.cs). The original isn't changed.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<JsonResult> SaveRotatedCopy(string folder, string fileName, int degrees)
+        {
+            string sourcePath = MediaPaths.ResolveFile(folder, fileName);
+            if (sourcePath == null || !System.IO.File.Exists(sourcePath))
+                return Json(new { success = false, message = "File not found." });
+
+            int? clockwise = RotatedCopy.Normalize(degrees);
+            if (clockwise == null)
+                return Json(new { success = false, message = "It can only be turned in quarter turns." });
+            if (clockwise == 0)
+                return Json(new { success = false, message = "It isn't rotated, so there's nothing to save." });
+
+            string name = Path.GetFileName(sourcePath);
+            string ext = RotatedCopy.CopyExtension(name);
+            if (ext == null)
+                return Json(new { success = false, message = "Only pictures and videos can be rotated." });
+
+            string directory = Path.GetDirectoryName(sourcePath);
+            string newName = FreeName(directory, Path.GetFileNameWithoutExtension(name) + " (rotated)" + ext);
+            string error = await RotatedCopy.MakeAsync(sourcePath, Path.Combine(directory, newName), clockwise.Value);
+            if (error != null)
+            {
+                ActivityLog.Error(ActivityLog.Copy, "Couldn't save a rotated copy: " + error, folder, name);
+                return Json(new { success = false, message = error });
+            }
+
+            InvalidateFolderCache(folder);
+            ActivityLog.Write(ActivityLog.Copy, "Rotated copy (" + clockwise + "° clockwise) of " + name + ".", folder, newName);
+            return Json(new { success = true, newName });
+        }
     }
 }

@@ -160,6 +160,7 @@
     <Compile Include="Models\MediaKind.cs" />
     <Compile Include="Models\ChunkedUpload.cs" />
     <Compile Include="Models\PlayableCopy.cs" />
+    <Compile Include="Models\RotatedCopy.cs" />
     <Compile Include="Models\Tags.cs" />
     <Compile Include="Models\VideoIndex.cs" />
     <Compile Include="Models\ZipDownload.cs" />
