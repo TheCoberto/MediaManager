@@ -182,6 +182,7 @@
     <Compile Include="Models\LoginThrottle.cs" />
     <Compile Include="Models\MediaAccess.cs" />
     <Compile Include="Models\MediaViews.cs" />
+    <Compile Include="Models\ActiveLogins.cs" />
     <Compile Include="Models\PasswordHasher.cs" />
     <Compile Include="Models\SiteSettings.cs" />
     <Compile Include="Models\ImageModel.cs" />

@@ -92,6 +92,54 @@
     <div class="alert alert-danger">@TempData["SignOutError"]</div>
 }
 
+@{
+    var logins = ViewBag.Logins as List<ActiveLogins.Login> ?? new List<ActiveLogins.Login>();
+    string currentLogin = ViewBag.CurrentLoginId as string;
+    Func<DateTime, string> ago = utc =>
+    {
+        var span = DateTime.UtcNow - utc;
+        return span.TotalMinutes < 2 ? "just now"
+            : span.TotalHours < 1 ? (int)span.TotalMinutes + " min ago"
+            : span.TotalDays < 1 ? (int)span.TotalHours + " h ago"
+            : utc.ToLocalTime().ToString("MMM d, HH:mm");
+    };
+}
+<h4 style="margin-top:18px;">Logged in now</h4>
+@if (!logins.Any())
+{
+    <p style="opacity:.8;">Nobody else is logged in (or the list will start filling in as devices load pages).</p>
+}
+else
+{
+    <table class="table table-condensed act-table" style="margin-bottom:8px;">
+        <thead><tr><th>Who</th><th>Device</th><th>Logged in</th><th>Last seen</th><th></th></tr></thead>
+        <tbody>
+            @foreach (var l in logins)
+            {
+                bool me = l.LoginId == currentLogin;
+                <tr>
+                    <td class="act-who">@l.Role<br /><small>@l.Ip</small></td>
+                    <td title="@l.Browser">@ActiveLogins.DescribeBrowser(l.Browser)@if (me) { <text> </text><span class="act-kind">this device</span> }</td>
+                    <td class="act-time" title="@l.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")">@ago(l.StartedAt)</td>
+                    <td class="act-time" title="@l.LastSeenAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")">@ago(l.LastSeenAt)</td>
+                    <td>
+                        @if (!me)
+                        {
+                            using (Html.BeginForm("EndLogin", "Activity", FormMethod.Post, new { style = "margin:0;",
+                                onsubmit = "return confirm('Log this device out? It will have to enter the password again.');" }))
+                            {
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@l.LoginId" />
+                                <button type="submit" class="btn btn-default btn-xs">Log out</button>
+                            }
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
 @using (Html.BeginForm("SignOutEverywhere", "Activity", FormMethod.Post, new { style = "margin-bottom:10px;",
     onsubmit = "return confirm('Log out every other device, and any guests? They will have to enter the password again. You stay logged in here.');" }))
 {

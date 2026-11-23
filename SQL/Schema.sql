@@ -218,6 +218,20 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.MediaV
     CREATE INDEX IX_MediaViews_At ON dbo.MediaViews (At);
 GO
 
+-- Who is logged in right now (Models/ActiveLogins.cs, the Activity page's "Logged in now" list). Times are UTC.
+-- RevokedAt = logged out from that list: the login's id is refused until it would have expired anyway.
+IF OBJECT_ID('dbo.ActiveLogins', 'U') IS NULL
+CREATE TABLE dbo.ActiveLogins (
+    LoginId    CHAR(32)      NOT NULL PRIMARY KEY,
+    Role       NVARCHAR(10)  NOT NULL,
+    Ip         NVARCHAR(45)  NULL,
+    Browser    NVARCHAR(400) NULL,          -- User-Agent
+    StartedAt  DATETIME2(0)  NOT NULL,
+    LastSeenAt DATETIME2(0)  NOT NULL,
+    RevokedAt  DATETIME2(0)  NULL
+);
+GO
+
 -- ============================================================
 -- Stored procedures (used by the Guest Uploads page)
 -- ============================================================

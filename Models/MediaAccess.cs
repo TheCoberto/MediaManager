@@ -31,6 +31,8 @@ namespace MediaManager.Models
             public int TimeoutMinutes { get; set; }
             /// <summary>When this login started (kept as the pass is renewed). MinValue for passes made before this was recorded.</summary>
             public DateTime LoggedInUtc { get; set; }
+            /// <summary>This login's id (Models\ActiveLogins), or null for passes made before logins had ids.</summary>
+            public string LoginId { get; set; }
         }
 
         // ---- Sign out everywhere ----
@@ -100,7 +102,9 @@ namespace MediaManager.Models
             }
 
             context.Session["AuthAt"] = now.Ticks;
-            Issue(context, keepRole, timeoutMinutes, now);
+            string keepId = context.Session["LoginId"] as string;
+            Issue(context, keepRole, timeoutMinutes, now, keepId);
+            ActiveLogins.ForgetAllExcept(keepId);
             return true;
         }
 
@@ -136,7 +140,8 @@ namespace MediaManager.Models
 
         /// <summary>Gives the browser a new pass for this role.</summary>
         /// <param name="loggedInUtc">When the login started: now for a new login, or the old pass's time when renewing.</param>
-        public static void Issue(HttpContextBase context, string role, int timeoutMinutes, DateTime? loggedInUtc = null)
+        /// <param name="loginId">The login's id (Models\ActiveLogins); a new one if null.</param>
+        public static void Issue(HttpContextBase context, string role, int timeoutMinutes, DateTime? loggedInUtc = null, string loginId = null)
         {
             if (timeoutMinutes < 1)
                 timeoutMinutes = 20;
@@ -144,7 +149,8 @@ namespace MediaManager.Models
             string payload = string.Join("|", role,
                 DateTime.UtcNow.AddMinutes(timeoutMinutes).Ticks.ToString(CultureInfo.InvariantCulture),
                 timeoutMinutes.ToString(CultureInfo.InvariantCulture),
-                (loggedInUtc ?? DateTime.UtcNow).Ticks.ToString(CultureInfo.InvariantCulture));
+                (loggedInUtc ?? DateTime.UtcNow).Ticks.ToString(CultureInfo.InvariantCulture),
+                ActiveLogins.IsValidId(loginId) ? loginId : ActiveLogins.NewId());
 
             byte[] sealedBytes = MachineKey.Protect(Encoding.UTF8.GetBytes(payload), Purpose, SiteKey);
             context.Response.Cookies.Set(NewCookie(context, HttpServerUtility.UrlTokenEncode(sealedBytes)));
@@ -170,15 +176,18 @@ namespace MediaManager.Models
                 return null;
             }
 
-            // role | expires | timeout [| logged in]. Passes from before "logged in" was added have 3 parts and count
-            // as logged in long ago: fine until someone signs out everywhere.
+            // role | expires | timeout [| logged in [| login id]]. Passes from before "logged in" was added have 3 parts
+            // and count as logged in long ago: fine until someone signs out everywhere. Passes without an id get one
+            // the next time they're renewed (AuthFilter).
             var parts = payload.Split('|');
             long loggedIn = 0;
-            if ((parts.Length != 3 && parts.Length != 4)
+            string loginId = parts.Length == 5 ? parts[4] : null;
+            if ((parts.Length < 3 || parts.Length > 5)
+                || (loginId != null && !ActiveLogins.IsValidId(loginId))
                 || (parts[0] != Roles.Owner && parts[0] != Roles.Guest)
                 || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out long ticks)
                 || !int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out int timeout)
-                || (parts.Length == 4 && !long.TryParse(parts[3], NumberStyles.None, CultureInfo.InvariantCulture, out loggedIn)))
+                || (parts.Length >= 4 && !long.TryParse(parts[3], NumberStyles.None, CultureInfo.InvariantCulture, out loggedIn)))
                 return null;
 
             if (ticks <= DateTime.UtcNow.Ticks || ticks > DateTime.MaxValue.Ticks || loggedIn > DateTime.MaxValue.Ticks)
@@ -188,12 +197,17 @@ namespace MediaManager.Models
             if (loggedIn < SignedOutBeforeUtc.Ticks)
                 return null;
 
+            // This device was logged out from the Activity page
+            if (ActiveLogins.IsRevoked(loginId))
+                return null;
+
             return new Pass
             {
                 Role = parts[0],
                 ExpiresUtc = new DateTime(ticks, DateTimeKind.Utc),
                 TimeoutMinutes = timeout,
-                LoggedInUtc = new DateTime(loggedIn, DateTimeKind.Utc)
+                LoggedInUtc = new DateTime(loggedIn, DateTimeKind.Utc),
+                LoginId = loginId
             };
         }
 
@@ -204,15 +218,16 @@ namespace MediaManager.Models
         public static void Refresh(HttpContextBase context, string role, int timeoutMinutes)
         {
             var pass = Read(context);
-            if (pass == null || pass.Role != role || IsOld(pass))
-                Issue(context, role, timeoutMinutes, SessionLoggedIn(context) ?? pass?.LoggedInUtc);
+            string sessionId = context.Session?["LoginId"] as string;
+            if (pass == null || pass.Role != role || IsOld(pass) || (sessionId != null && pass.LoginId != sessionId))
+                Issue(context, role, timeoutMinutes, SessionLoggedIn(context) ?? pass?.LoggedInUtc, sessionId ?? pass?.LoginId);
         }
 
         /// <summary>Extends a valid pass that's more than half used up (e.g. while a long video keeps loading).</summary>
         public static void RenewIfOld(HttpContextBase context, Pass pass)
         {
             if (IsOld(pass))
-                Issue(context, pass.Role, pass.TimeoutMinutes, pass.LoggedInUtc);
+                Issue(context, pass.Role, pass.TimeoutMinutes, pass.LoggedInUtc, pass.LoginId);
         }
 
         // When this browser's session logged in (Session["AuthAt"], set by AuthFilter), if it has one

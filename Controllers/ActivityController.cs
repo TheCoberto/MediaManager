@@ -17,6 +17,8 @@ namespace MediaManager.Controllers
         {
             ViewBag.Errors = errors;
             ViewBag.PageSize = PageSize;
+            ViewBag.Logins = ActiveLogins.Current();
+            ViewBag.CurrentLoginId = Session["LoginId"] as string;
             try
             {
                 // The "Last 7 days" summary, on the first page only
@@ -50,6 +52,29 @@ namespace MediaManager.Controllers
                 ActivityLog.Error(ActivityLog.Login, "Log out all other devices failed: " + error);
                 TempData["SignOutError"] = "Couldn't log out the other devices: " + error;
             }
+            return RedirectToAction("Index");
+        }
+
+        /// <summary>Logs one device out (the "Logged in now" list). Not this one: that's the menu's Log out.</summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult EndLogin(string id)
+        {
+            if (id == Session["LoginId"] as string)
+            {
+                TempData["SignOutError"] = "That's this device: use Log out in the menu instead.";
+                return RedirectToAction("Index");
+            }
+
+            var ended = ActiveLogins.Revoke(id);
+            if (ended != null)
+            {
+                string who = ended.Role + " on " + ActiveLogins.DescribeBrowser(ended.Browser) + (ended.Ip != null ? " (" + ended.Ip + ")" : "");
+                ActivityLog.Write(ActivityLog.Login, "Logged out one device: " + who + ".");
+                TempData["SignOutMessage"] = "Logged out " + who + ". It has to log in again.";
+            }
+            else
+                TempData["SignOutError"] = "Couldn't log that device out: it may have logged out already, or the database needs SQL\\Schema.sql applied.";
             return RedirectToAction("Index");
         }
     }

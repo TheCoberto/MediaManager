@@ -81,6 +81,8 @@ namespace MediaManager.Filters
             }
 
             MediaAccess.RenewIfOld(http, pass);
+            // "Logged in now" list: watching a long video counts as being here (at most one write a minute)
+            ActiveLogins.Touch(pass.LoginId, pass.Role, context.Request.UserHostAddress, context.Request.UserAgent, pass.LoggedInUtc);
         }
 
         private static bool GuestMayOpen(string path)
