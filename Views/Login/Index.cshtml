@@ -97,6 +97,7 @@
         }
 
         <form method="post">
+            @Html.AntiForgeryToken()
             <div class="pw-wrap">
                 <input type="password" id="password" name="password" class="pw-input" placeholder="Enter password"
                        autocomplete="current-password" autofocus />

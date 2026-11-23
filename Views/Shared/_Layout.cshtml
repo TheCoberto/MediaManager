@@ -97,7 +97,11 @@
                         {
                             <li><p class="navbar-text">Guest</p></li>
                         }
-                        <li>@Html.ActionLink("Log out", "Logout", "Login")</li>
+                        <li>
+                            @* A POST, so another site can't log you out with a link or a picture *@
+                            <a href="#" onclick="document.getElementById('logoutForm').submit(); return false;">Log out</a>
+                            <form id="logoutForm" method="post" action="@Url.Action("Logout", "Login")" style="display:none">@Html.AntiForgeryToken()</form>
+                        </li>
                     }
                 </ul>
             </div>

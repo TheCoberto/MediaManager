@@ -173,6 +173,13 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.ActivityLog') AND name = 'IX_ActivityLog_Errors')
     CREATE INDEX IX_ActivityLog_Errors ON dbo.ActivityLog (IsError, ActivityId DESC);
 GO
+-- Who did it: the device's IP address and Owner / Guest (both NULL for the server's own entries)
+IF COL_LENGTH('dbo.ActivityLog', 'Ip') IS NULL
+    ALTER TABLE dbo.ActivityLog ADD Ip NVARCHAR(45) NULL;
+GO
+IF COL_LENGTH('dbo.ActivityLog', 'Role') IS NULL
+    ALTER TABLE dbo.ActivityLog ADD Role NVARCHAR(10) NULL;
+GO
 
 -- ============================================================
 -- Stored procedures (used by the Guest Uploads page)

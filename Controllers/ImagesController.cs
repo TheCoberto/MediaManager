@@ -214,6 +214,7 @@ namespace MediaManager.Controllers
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult ImageEdit(ImageModel imageModel)
         {
 

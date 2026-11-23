@@ -1,5 +1,8 @@
 ﻿using MediaManager.Models;
 using System;
+using System.Configuration;
+using System.Web;
+using System.Web.Configuration;
 using System.Web.Mvc;
 
 namespace MediaManager.Controllers
@@ -20,6 +23,7 @@ namespace MediaManager.Controllers
 
         /// <param name="returnUrl">The page to go back to (from the query string: the login form posts to its own URL).</param>
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult Index(string password, string returnUrl)
         {
             var ownerHash = SiteSettings.LoginPasswordHash;
@@ -73,20 +77,44 @@ namespace MediaManager.Controllers
             return View();
         }
 
+        // Log out is a POST (the menu's Log out link sends a small hidden form), so another site can't log you out
+        // with a link or a picture. An old bookmark to this address just goes to the home page.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public ActionResult Logout()
         {
-            Session.Clear();
+            if (Session["Auth"] != null)
+                ActivityLog.Write(ActivityLog.Login, (Roles.IsGuest(Session) ? "Guest" : "Owner") + " logged out.");
+            EndSession();
             MediaAccess.Clear(HttpContext);
             return RedirectToAction("Index");
         }
 
+        [HttpGet]
+        [ActionName("Logout")]
+        public ActionResult LogoutGet() => RedirectToAction("Index", "Home");
+
         private void LogIn(string client, string role)
         {
             LoginThrottle.Reset(client);
-            Session["Auth"] = true;
-            Session["Role"] = role;
-            Session.Timeout = SiteSettings.LoginMinutes;            // Site.config LoginHours (default 12 hours)
-            MediaAccess.Issue(HttpContext, role, Session.Timeout); // lets the browser load /media files, and logs it back in (AuthFilter)
+
+            // A new session for the new login: the session the browser had before (which someone else could have
+            // planted) is thrown away and its cookie dropped, so the next page starts a fresh one. That page's
+            // AuthFilter logs it in from the media pass issued here, the same way it does after a restart.
+            EndSession();
+            MediaAccess.Issue(HttpContext, role, SiteSettings.LoginMinutes); // Site.config LoginHours (default 12 hours)
+            HttpContext.Items[ActivityLog.RoleItem] = role;                   // the session can't say it any more
         }
+
+        private void EndSession()
+        {
+            Session.Clear();
+            Session.Abandon();
+            // Without this the browser would send the old ID back, and ASP.NET would reuse it for the new session.
+            Response.Cookies.Add(new HttpCookie(SessionCookieName, "") { Expires = DateTime.UtcNow.AddYears(-1), HttpOnly = true });
+        }
+
+        private static readonly string SessionCookieName =
+            (ConfigurationManager.GetSection("system.web/sessionState") as SessionStateSection)?.CookieName ?? "ASP.NET_SessionId";
     }
 }
