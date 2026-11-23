@@ -276,7 +276,8 @@ namespace MediaManager.Models
             return true;
         }
 
-        private static RotateFlipType RotationFor(Image image)
+        /// <summary>The turn that puts a photo upright by its EXIF orientation note (also used by RotatedCopy).</summary>
+        internal static RotateFlipType RotationFor(Image image)
         {
             if (!image.PropertyIdList.Contains(ExifOrientation))
                 return RotateFlipType.RotateNoneFlipNone;

@@ -41,6 +41,11 @@
         try { sessionStorage.setItem(NOTICE_KEY, message); } catch (e) { }
         location.reload();
     }
+    // Same, but goes to another page (e.g. the View page of a copy just made)
+    function goWithMessage(url, message) {
+        try { sessionStorage.setItem(NOTICE_KEY, message); } catch (e) { }
+        window.location.href = url;
+    }
     $(function () {
         var message = null;
         try { message = sessionStorage.getItem(NOTICE_KEY); sessionStorage.removeItem(NOTICE_KEY); } catch (e) { }
@@ -759,6 +764,7 @@
         normalizeFolder: normalizeFolder,
         showToast: showToast,
         reloadWithMessage: reloadWithMessage,
+        goWithMessage: goWithMessage,
         showLoginExpired: showLoginExpired,
         post: post,
         busy: busy,
