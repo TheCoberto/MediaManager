@@ -1,0 +1,54 @@
+@* Shared form for the Audio and Video Downloader. ViewData: Action ("DownloadAudio" / "DownloadVideo"). *@
+@{
+    string action = (string)ViewData["Action"];
+    string savedName = TempData["DownloadSaved"] as string;
+    string savedFolder = TempData["DownloadFolder"] as string;
+    string error = TempData["DownloadError"] as string;
+}
+
+@if (savedName != null)
+{
+    <div class="alert alert-success">
+        Saved "@savedName" to
+        <a href="@Url.Action("Gallery", "Media", new { folder = savedFolder })">@savedFolder</a>.
+    </div>
+}
+@if (error != null)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@using (Html.BeginForm(action, "Downloaders", FormMethod.Post, new { id = "downloadForm" }))
+{
+    @Html.AntiForgeryToken()
+    <input type="text" name="url" placeholder="Paste URL" required />
+    <input type="text" placeholder="Name" name="name" id="nameInput" required>
+    <input type="text" name="folder" id="folderInput" list="folderList" value="@ViewBag.Folder" autocomplete="off"
+           placeholder="Save to folder (optional)" title="Leave empty to download to this device, or pick a library folder to save it on the server" />
+    <datalist id="folderList"></datalist>
+    <button type="submit" id="downloadBtn">Download</button>
+    <div id="downloadStatus" style="margin-top:8px; display:none;"></div>
+}
+
+<script>
+    (function () {
+        // Folder suggestions (the box still accepts a brand-new folder)
+        fetch('@Url.Action("GetFolders", "Media")?v=' + Date.now(), { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : [])
+            .then(list => {
+                const dl = document.getElementById('folderList');
+                (list || []).forEach(f => { const o = document.createElement('option'); o.value = f; dl.appendChild(o); });
+            })
+            .catch(() => { });
+
+        // Saving to the server takes a while and the page only changes at the end, so say so.
+        document.getElementById('downloadForm').addEventListener('submit', function () {
+            if (!document.getElementById('folderInput').value.trim()) return;
+            const btn = document.getElementById('downloadBtn');
+            const status = document.getElementById('downloadStatus');
+            btn.disabled = true;
+            status.textContent = 'Downloading and saving to the library... this can take a few minutes.';
+            status.style.display = '';
+        });
+    })();
+</script>

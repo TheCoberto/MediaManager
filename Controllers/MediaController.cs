@@ -349,19 +349,9 @@ namespace MediaManager.Controllers
                 return "File name is missing or too long (max 74 characters).";
             if (newFileName.Contains("#") || newFileName.Contains("/") || newFileName.Contains("\\"))
                 return "File name cannot contain #, /, or \\.";
-            if (string.IsNullOrWhiteSpace(folder))
-                return "Folder is required.";
-
-            safeFolder = MediaPaths.NormalizeFolder(folder).TrimStart('~', '/');
-            folderPath = MediaPaths.ResolveFolder(safeFolder);
-            if (safeFolder.Length == 0 || folderPath == null)
-                return "Folder is invalid.";
-            // Not into the site's own hidden folders (checked on the resolved path: Windows drops trailing dots)
-            if (MediaPaths.ToRelative(folderPath).Split('/').Any(p =>
-                    string.Equals(p, RecycleBin.FolderName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(p, ChunkedUpload.FolderName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(p, Thumbnails.FolderName, StringComparison.OrdinalIgnoreCase)))
-                return "Folder is invalid.";
+            string folderError = CheckTargetFolder(folder, out safeFolder, out folderPath);
+            if (folderError != null)
+                return folderError;
 
             string uploadExt = Path.GetExtension(originalName ?? "").ToLowerInvariant();
             if (!Constants.SupportedExtensions.Contains(uploadExt))
@@ -376,8 +366,34 @@ namespace MediaManager.Controllers
             return MediaPaths.IsPlainFileName(targetName) ? null : "File name is invalid.";
         }
 
-        /// <summary>Puts an upload in its folder under a name that's free ("cat.jpg" -> "cat (2).jpg"), never overwriting.</summary>
-        private JsonResult PlaceAddMedia(string safeFolder, string folderPath, string requestedName, Action<string> place)
+        /// <summary>
+        /// Checks a library folder that new files go into (Add Media, the Downloaders). It may not exist yet.
+        /// Returns an error message, or null with the folder's normalized name and full path.
+        /// </summary>
+        internal static string CheckTargetFolder(string folder, out string safeFolder, out string folderPath)
+        {
+            safeFolder = folderPath = null;
+            if (string.IsNullOrWhiteSpace(folder))
+                return "Folder is required.";
+
+            safeFolder = MediaPaths.NormalizeFolder(folder).TrimStart('~', '/');
+            folderPath = MediaPaths.ResolveFolder(safeFolder);
+            if (safeFolder.Length == 0 || folderPath == null)
+                return "Folder is invalid.";
+            // Not into the site's own hidden folders (checked on the resolved path: Windows drops trailing dots)
+            if (MediaPaths.ToRelative(folderPath).Split('/').Any(p =>
+                    string.Equals(p, RecycleBin.FolderName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p, ChunkedUpload.FolderName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(p, Thumbnails.FolderName, StringComparison.OrdinalIgnoreCase)))
+                return "Folder is invalid.";
+            return null;
+        }
+
+        /// <summary>
+        /// Puts a new file in a library folder under a name that's free ("cat.jpg" -> "cat (2).jpg"), never
+        /// overwriting, and refreshes the folder's cached listings. Returns the name it was saved under.
+        /// </summary>
+        internal static string PlaceInLibrary(string safeFolder, string folderPath, string requestedName, Action<string> place)
         {
             Directory.CreateDirectory(folderPath);
 
@@ -387,9 +403,16 @@ namespace MediaManager.Controllers
             for (int n = 2; System.IO.File.Exists(Path.Combine(folderPath, name)); n++)
                 name = $"{baseName} ({n}){ext}";
 
-            string placed = Path.Combine(folderPath, name);
-            place(placed);
+            place(Path.Combine(folderPath, name));
             InvalidateFolderCache(safeFolder);
+            return name;
+        }
+
+        /// <summary>Puts an upload in its folder under a name that's free ("cat.jpg" -> "cat (2).jpg"), never overwriting.</summary>
+        private JsonResult PlaceAddMedia(string safeFolder, string folderPath, string requestedName, Action<string> place)
+        {
+            string name = PlaceInLibrary(safeFolder, folderPath, requestedName, place);
+            string placed = Path.Combine(folderPath, name);
             ActivityLog.Write(ActivityLog.Upload, "Uploaded (" + ActivityLog.FormatBytes(new FileInfo(placed).Length) + ")"
                 + (name == requestedName ? "." : ", saved under a new name because \"" + requestedName + "\" already existed."), safeFolder, name);
 
