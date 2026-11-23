@@ -234,6 +234,7 @@
     <Content Include="Views\Images\ImageViewAllShuffled.cshtml" />
     <Content Include="Views\Downloaders\AudioDownloader.cshtml" />
     <Content Include="Views\Downloaders\VideoDownloader.cshtml" />
+    <Content Include="Views\Downloaders\_DownloadForm.cshtml" />
     <Content Include="Views\Login\Index.cshtml" />
     <Content Include="Views\Media\Gallery.cshtml" />
     <Content Include="Views\Media\ViewMedia.cshtml" />
