@@ -9,7 +9,9 @@ namespace MediaManager.Controllers
     [AuthFilter]
     public class HomeController : Controller
     {
-        public ActionResult Index()
+        public ActionResult Index() => View();
+
+        public ActionResult Folders()
         {
             // Every folder is rendered; the page hides those under a hidden top-level folder
             // so they can be shown again instantly from the dropdown.
