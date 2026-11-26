@@ -31,7 +31,7 @@
     }
     else
     {
-        <u>@Html.ActionLink("← Home", "Index", "Home")</u>
+        <u>@Html.ActionLink("← Folders", "Folders", "Home")</u>
         <span style="opacity:.75; margin-left:8px;">This file is at the very top of the library, outside any folder.</span>
     }
 </p>
@@ -167,7 +167,7 @@
             const file = @Html.Raw(Json.Encode(file));
             const prevLink = @Html.Raw(Json.Encode(prevLink));
             const nextLink = @Html.Raw(Json.Encode(nextLink));
-            const galleryLink = @Html.Raw(Json.Encode(galleryLink ?? Url.Action("Index", "Home")));
+            const galleryLink = @Html.Raw(Json.Encode(galleryLink ?? Url.Action("Folders", "Home")));
 
             // After Move / Delete, carry on with the next file (or previous, or back to the gallery)
             function goOn() {

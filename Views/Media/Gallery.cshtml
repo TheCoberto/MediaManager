@@ -8,7 +8,7 @@
 
 @* Where you are: every part goes to that folder's gallery *@
 <p class="crumbs">
-    @Html.ActionLink("Home", "Index", "Home")
+    @Html.ActionLink("Folders", "Folders", "Home")
     @for (int i = 0; i < parts.Length; i++)
     {
         <span class="crumb-sep">&rsaquo;</span>
@@ -710,7 +710,7 @@
                         alert(res.message);
                         // Go up a level (or home for a top-level folder)
                         if (res.parent) T.go(res.parent, null);
-                        else window.location.href = '@Url.Action("Index", "Home")';
+                        else window.location.href = '@Url.Action("Folders", "Home")';
                     }, () => T.idle($btn));
                 })
                 .fail(xhr => { if (xhr.status !== 401) alert("Couldn't check the folder (" + xhr.status + ")."); });

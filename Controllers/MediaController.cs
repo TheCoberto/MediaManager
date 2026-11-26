@@ -26,7 +26,7 @@ namespace MediaManager.Controllers
                 return HttpNotFound();
 
             if (string.IsNullOrWhiteSpace(folder))
-                return RedirectToAction("Index", "Home");
+                return RedirectToAction("Folders", "Home");
 
             // Accept an absolute path under the root too ("E:/Videos/Cats" -> "Videos/Cats")
             folder = folder.Replace("\\", "/");
