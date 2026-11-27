@@ -90,8 +90,6 @@ the guest uploads folder and shared folders (`Filters/MediaAuthModule.cs`), so e
   security entries longer than the rest.
 - **Email the weekly summary.** The Activity page's "Last 7 days" panel as a weekly email. Needs mail server
   settings in `Site.config` and something to send it on a schedule (a Windows scheduled task calling a URL).
-- **Count guest views.** Views are counted when a file's View or Random page opens (`Models/MediaViews.cs`);
-  guests' shared-folder pages load files directly, so their views aren't counted yet.
 
 ## Deploying
 

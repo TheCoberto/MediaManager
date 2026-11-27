@@ -39,7 +39,7 @@
         <div class="media-item" style="margin-bottom:25px; border-bottom:1px solid #555; padding-bottom:15px;">
             <h4 style="word-break:break-all;">@f.FileName</h4>
             @* Filled in by media-common.js (picture, video / audio player, or document preview) *@
-            <div class="media-player" data-src="@f.Url" data-file="@f.FileName" data-thumb="@f.ThumbUrl" data-compact="true" data-max-height="600px"></div>
+            <div class="media-player" data-src="@f.Url" data-folder="@Model.Folder" data-file="@f.FileName" data-thumb="@f.ThumbUrl" data-compact="true" data-max-height="600px"></div>
             <div style="margin-top:8px;">
                 <a href="@f.Url" target="_blank">Open</a> &middot;
                 <a href="@f.Url" download="@f.FileName">Download</a>
@@ -69,5 +69,6 @@
 </style>
 
 @section scripts {
+    <script>window.MEDIA_URLS = { recordView: '@Url.Action("RecordView", "Media")' };</script>
     <script src="@Url.Versioned("~/Scripts/media-common.js")"></script>
 }
