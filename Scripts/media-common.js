@@ -787,7 +787,86 @@
         setupFullscreenFix();
     }
 
+    // ---------- view counting ----------
+    // A video / audio counts once it has played a few seconds; a picture once most of it has stayed on screen
+    // for a moment (so scrolling quickly past doesn't count). The file comes from the nearest element with
+    // data-folder and data-file. The server skips repeats within its own window (Models/MediaViews.cs).
+    var VIEW_PLAY_SECONDS = 3, VIEW_LOOK_MS = 1500, VIEW_LOOK_SHARE = 0.6;
+    var viewsSent = {};
+
+    function viewTarget(el) {
+        var owner = el.closest && el.closest("[data-folder][data-file]");
+        if (!owner) return null;
+        return { folder: owner.getAttribute("data-folder"), file: owner.getAttribute("data-file") };
+    }
+
+    function sendView(t) {
+        if (!URLS.recordView || !t || !t.file) return;
+        var key = normalizeFolder(t.folder) + "/" + t.file;
+        if (viewsSent[key]) return;
+        viewsSent[key] = true;
+        try {
+            fetch(URLS.recordView, {
+                method: "POST", credentials: "same-origin", keepalive: true,
+                body: new URLSearchParams({ folder: t.folder || "", file: t.file })
+            }).catch(function () { });
+        } catch (e) { /* very old browser: just don't count */ }
+    }
+
+    function secondsPlayed(media) {
+        var total = 0;
+        for (var i = 0; i < media.played.length; i++) total += media.played.end(i) - media.played.start(i);
+        return total;
+    }
+
+    function setupViewCounting() {
+        if (!URLS.recordView) return;
+
+        document.addEventListener("timeupdate", function (e) {
+            var m = e.target;
+            if (m.tagName !== "VIDEO" && m.tagName !== "AUDIO") return;
+            var need = isFinite(m.duration) && m.duration > 0 ? Math.min(VIEW_PLAY_SECONDS, m.duration * 0.5) : VIEW_PLAY_SECONDS;
+            if (secondsPlayed(m) >= need) sendView(viewTarget(m));
+        }, true);
+
+        if (!("IntersectionObserver" in window)) return;
+        var timers = new WeakMap();
+        var watched = new WeakSet();
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+                var img = en.target;
+                if (en.isIntersecting && en.intersectionRatio >= VIEW_LOOK_SHARE) {
+                    if (!timers.has(img)) timers.set(img, setTimeout(function () {
+                        io.unobserve(img);
+                        sendView(viewTarget(img));
+                    }, VIEW_LOOK_MS));
+                } else if (timers.has(img)) {
+                    clearTimeout(timers.get(img));
+                    timers.delete(img);
+                }
+            });
+        }, { threshold: [0, VIEW_LOOK_SHARE] });
+
+        function watchImages(root) {
+            if (!root.querySelectorAll) return;
+            var imgs = root.tagName === "IMG" ? [root] : root.querySelectorAll("img");
+            Array.prototype.forEach.call(imgs, function (img) {
+                if (watched.has(img)) return;
+                var t = viewTarget(img);
+                if (!t || kindOf(t.file) !== "image") return; // e.g. a video's thumbnail: playing it is what counts
+                watched.add(img);
+                io.observe(img);
+            });
+        }
+
+        watchImages(document);
+        new MutationObserver(function (changes) {
+            changes.forEach(function (c) { Array.prototype.forEach.call(c.addedNodes, watchImages); });
+        }).observe(document.body, { childList: true, subtree: true });
+    }
+
     setupVideoHelpers();
+    setupViewCounting();
 
     // This script loads at the end of the page, so placeholders are already there.
     renderPlayers(document);

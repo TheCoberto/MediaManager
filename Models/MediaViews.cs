@@ -14,7 +14,8 @@ namespace MediaManager.Models
     /// How often each file has been looked at (dbo.MediaViews, one row per view): the count on the view page,
     /// the Most Viewed page, and the Activity page's weekly summary.
     ///
-    /// A view is the file's own page opening (View, Random). Opening the same file again in the same browser
+    /// A view is the file's own page opening (View, Random), or, on list pages (Gallery, Favorites, Shared with me),
+    /// a video playing a few seconds or a picture staying on screen a moment (media-common.js, MediaController.RecordView). Opening the same file again in the same browser
     /// within RepeatWindow doesn't count again, so refreshing or stepping back and forth doesn't inflate it.
     /// Rename / Move / Delete through the site keep the counts with the file (MediaController), like tags.
     /// Counting never throws: a database without the table (SQL\Schema.sql not applied yet) just doesn't count.

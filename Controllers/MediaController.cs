@@ -491,6 +491,27 @@ namespace MediaManager.Controllers
             return View(model);
         }
 
+        /// <summary>
+        /// Counts a view from a list page (Gallery, Favorites, Shared with me): media-common.js calls it once a
+        /// video has played a few seconds or a picture has stayed on screen a moment. Guests only for shared folders.
+        /// No anti-forgery token: shared pages don't carry one, and the worst a forged call can do is add a view.
+        /// </summary>
+        [HttpPost]
+        [GuestAllowed]
+        public ActionResult RecordView(string folder, string file)
+        {
+            folder = MediaPaths.NormalizeFolder(folder);
+            if (string.IsNullOrEmpty(file) || file.IndexOfAny(new[] { '/', '\\' }) >= 0)
+                return new HttpStatusCodeResult(400);
+            if (Roles.IsGuest(Session) && !SharedFolders.IsShared(folder))
+                return new HttpStatusCodeResult(403);
+            if (!(MediaPaths.ResolveFile(folder, file) is string path) || !System.IO.File.Exists(path))
+                return HttpNotFound();
+
+            MediaViews.Record(HttpContext, folder, Path.GetFileName(path));
+            return new HttpStatusCodeResult(204);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public JsonResult DeleteMedia(string folder, string file)
