@@ -338,22 +338,50 @@
      */
     function tagEditor(container, folder, file) {
         var $c = $(container).addClass("tag-editor");
-        var listId = "tagSuggest" + Math.floor(Math.random() * 1e9);
         $c.html('<span class="tag-chips"></span>'
-            + '<input type="text" class="tag-input" list="' + listId + '" placeholder="Add a tag..." maxlength="100" autocomplete="off">'
-            + '<datalist id="' + listId + '"></datalist>'
+            + '<span class="tag-combo">'
+            + '<input type="text" class="tag-input" placeholder="Add a tag..." maxlength="100" autocomplete="off">'
+            + '<ul class="tag-dropdown" hidden></ul></span>'
             + '<button type="button" class="tag-add-btn">Add</button>');
-        var $chips = $c.find(".tag-chips"), $input = $c.find(".tag-input"), $list = $c.find("datalist");
+        var $chips = $c.find(".tag-chips"), $input = $c.find(".tag-input"), $drop = $c.find(".tag-dropdown");
+        var allTags = [], onFile = {}, active = -1;
 
         function suggest() {
-            loadTags().then(function (all) {
-                $list.html(all.map(function (t) { return '<option value="' + escapeHtml(t.Name) + '">'; }).join(""));
-            });
+            loadTags().then(function (all) { allTags = all; if ($input.is(":focus")) showDrop(); });
+        }
+
+        // The searchable dropdown: existing tags (not already on this file) containing what's typed, most-used first
+        function showDrop() {
+            var q = $input.val().trim().toLowerCase();
+            var matches = allTags.filter(function (t) {
+                return !onFile[t.Name.toLowerCase()] && t.Name.toLowerCase().indexOf(q) >= 0;
+            }).sort(function (a, b) {
+                var as = a.Name.toLowerCase().indexOf(q) === 0, bs = b.Name.toLowerCase().indexOf(q) === 0;
+                return as !== bs ? (as ? -1 : 1) : (b.FileCount - a.FileCount) || a.Name.localeCompare(b.Name);
+            }).slice(0, 50);
+            var exact = allTags.some(function (t) { return t.Name.toLowerCase() === q; });
+            var html = matches.map(function (t) {
+                return '<li data-name="' + escapeHtml(t.Name) + '">' + escapeHtml(t.Name)
+                    + ' <span class="tag-count">' + t.FileCount + '</span></li>';
+            }).join("");
+            if (q && !exact) html += '<li class="tag-new" data-name="' + escapeHtml($input.val().trim()) + '">Create "'
+                + escapeHtml($input.val().trim()) + '"</li>';
+            active = -1;
+            $drop.html(html).prop("hidden", !html);
+        }
+        function hideDrop() { $drop.prop("hidden", true); active = -1; }
+        function highlight(i) {
+            var $items = $drop.children("li");
+            if (!$items.length) return;
+            active = (i + $items.length) % $items.length;
+            $items.removeClass("active").eq(active).addClass("active")[0].scrollIntoView({ block: "nearest" });
         }
 
         function render() {
             $.getJSON(URLS.tagsForFile, { folder: folder, file: file, v: Date.now() }).done(function (res) {
                 var tags = (res && res.tags) || [];
+                onFile = {};
+                tags.forEach(function (t) { onFile[t.Name.toLowerCase()] = true; });
                 $chips.html(tags.length ? tags.map(function (t) {
                     return '<span class="tag-chip" data-id="' + t.TagId + '">'
                         + '<a href="' + escapeHtml(URLS.tagsPage + "?tags=" + t.TagId) + '" title="Everything tagged ' + escapeHtml(t.Name) + '">'
@@ -363,9 +391,10 @@
             });
         }
 
-        function add() {
-            var name = $input.val().trim();
+        function add(name) {
+            name = (typeof name === "string" ? name : $input.val()).trim();
             if (!name) return;
+            hideDrop();
             addTag(name, [{ folder: folder, file: file }]).then(function () {
                 $input.val("");
                 render();
@@ -373,8 +402,20 @@
             }, function () { });
         }
 
-        $c.on("click", ".tag-add-btn", add);
-        $input.on("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); add(); } });
+        $c.on("click", ".tag-add-btn", function () { add(); });
+        $input.on("focus input", showDrop);
+        $input.on("blur", function () { setTimeout(hideDrop, 150); });
+        $input.on("keydown", function (e) {
+            if (e.key === "ArrowDown") { e.preventDefault(); if ($drop.prop("hidden")) showDrop(); highlight(active + 1); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); highlight(active - 1); }
+            else if (e.key === "Escape") { hideDrop(); }
+            else if (e.key === "Enter") {
+                e.preventDefault();
+                var $a = $drop.children("li.active");
+                add($a.length ? $a.attr("data-name") : undefined);
+            }
+        });
+        $drop.on("mousedown", "li", function (e) { e.preventDefault(); add($(this).attr("data-name")); });
         $c.on("click", ".tag-x", function () {
             var id = $(this).closest(".tag-chip").attr("data-id");
             post(URLS.tagsRemove, { id: id, folder: folder, file: file }).then(render, function () { });

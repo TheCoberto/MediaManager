@@ -67,6 +67,16 @@
     .tag-chip .tag-x:hover { opacity: 1; }
     .tag-none { opacity: .6; font-size: 13px; }
     .tag-input { width: 160px; padding: 2px 6px; }
+    .tag-combo { position: relative; display: inline-block; }
+    .tag-dropdown {
+        position: absolute; top: 100%; left: 0; z-index: 1000; min-width: 100%; max-height: 240px; overflow-y: auto;
+        margin: 2px 0 0; padding: 2px 0; list-style: none; text-align: left; font-size: 13px;
+        background: #222; color: #eee; border: 1px solid #555; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    }
+    .tag-dropdown li { padding: 4px 10px; cursor: pointer; white-space: nowrap; display: flex; justify-content: space-between; gap: 12px; }
+    .tag-dropdown li:hover, .tag-dropdown li.active { background: rgba(42, 122, 226, .45); }
+    .tag-dropdown .tag-count { opacity: .55; }
+    .tag-dropdown .tag-new { font-style: italic; }
     .tag-list { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
     .tag-list .tag-chip { padding: 0 8px; font-size: 12px; }
 
